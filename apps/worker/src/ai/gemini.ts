@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { ExtractedEmailSchema, ExtractedStorySchema, type ExtractedStory } from "@signalos/shared";
+import { ExtractedEmailSchema, ExtractedStorySchema, STORY_CATEGORIES, type ExtractedStory } from "@signalos/shared";
 import { env } from "../env";
 
 function client() {
@@ -15,10 +15,10 @@ const SYSTEM_GUARD =
 function getTargetModels(): string[] {
   const configured = env.GEMINI_MODEL?.trim();
   const models: string[] = [];
-  if (configured && !configured.includes("3.8")) {
+  if (configured && !configured.includes("3.8") && !configured.includes("1.5")) {
     models.push(configured);
   }
-  models.push("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash");
+  models.push("gemini-2.5-flash", "gemini-2.0-flash");
   return [...new Set(models)];
 }
 
@@ -77,9 +77,10 @@ export async function synthesizeStory(input: {
   content: string;
   url?: string;
 }): Promise<ExtractedStory> {
+  const safeTitle = input.title.replace(/"/g, "'");
   const raw = await generateJson(
     `Create a source-grounded intelligence card from this newsletter excerpt.
-Title: ${input.title}
+Title: ${safeTitle}
 URL: ${input.url ?? "none"}
 Excerpt:
 ${input.content.slice(0, 8000)}
@@ -87,10 +88,52 @@ ${input.content.slice(0, 8000)}
 Rules:
 - Distinguish claims from verified facts.
 - Include supportingExcerpt copied from the source.
-- novelty is 0-1.
-Return the ExtractedStory JSON object.`,
+- novelty is between 0.0 and 1.0.
+- category must be one of: "ai-research", "startups", "engineering", "hackathons", "business", "science", "careers", "other".
+
+Return valid JSON with this exact schema:
+{
+  "title": "${safeTitle}",
+  "summary": "2-3 sentences summarizing the development",
+  "whyItMatters": "Why this matters to practitioners and readers",
+  "category": "ai-research",
+  "keyPoints": ["bullet point 1", "bullet point 2"],
+  "entities": ["entity 1", "entity 2"],
+  "novelty": 0.7,
+  "sourceClaims": [
+    {
+      "claim": "Specific claim made",
+      "supportingExcerpt": "Exact or near quote from excerpt"
+    }
+  ]
+}`,
   );
-  return ExtractedStorySchema.parse(raw);
+
+  const obj = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, any>;
+  const rawCategory = String(obj.category || "other").toLowerCase();
+  const validCategory = (STORY_CATEGORIES as readonly string[]).includes(rawCategory)
+    ? (rawCategory as (typeof STORY_CATEGORIES)[number])
+    : "other";
+
+  const normalized: ExtractedStory = {
+    title: String(obj.title || input.title || "Untitled Story"),
+    summary: String(obj.summary || obj.description || obj.overview || input.content.slice(0, 300)),
+    whyItMatters: String(obj.whyItMatters || obj.why_it_matters || obj.importance || "Key development in this area."),
+    category: validCategory,
+    keyPoints: Array.isArray(obj.keyPoints || obj.key_points)
+      ? (obj.keyPoints || obj.key_points).map(String)
+      : [],
+    entities: Array.isArray(obj.entities) ? obj.entities.map(String) : [],
+    novelty: typeof obj.novelty === "number" && !isNaN(obj.novelty) ? Math.max(0, Math.min(1, obj.novelty)) : 0.5,
+    sourceClaims: Array.isArray(obj.sourceClaims || obj.source_claims)
+      ? (obj.sourceClaims || obj.source_claims).map((c: any) => ({
+          claim: String(c.claim || ""),
+          supportingExcerpt: String(c.supportingExcerpt || c.supporting_excerpt || c.excerpt || ""),
+        }))
+      : [],
+  };
+
+  return ExtractedStorySchema.parse(normalized);
 }
 
 export async function clusterTitle(candidate: string, existing: string[]) {

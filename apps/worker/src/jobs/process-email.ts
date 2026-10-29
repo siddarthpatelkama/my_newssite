@@ -18,6 +18,10 @@ async function withRetries<T>(fn: () => Promise<T>) {
 }
 
 export async function processPendingEmails(limit = 10) {
+  await supabase
+    .from("emails")
+    .update({ processing_status: "pending", next_retry_at: null, processing_attempts: 0 })
+    .eq("processing_status", "failed");
   const { data: claimed, error } = await supabase.rpc("claim_pending_emails", { p_limit: limit });
   if (error) throw error;
   const ids: string[] = (claimed ?? []).map((email: { id: string }) => email.id);
