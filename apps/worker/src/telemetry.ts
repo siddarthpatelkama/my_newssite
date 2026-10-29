@@ -26,6 +26,7 @@ export async function withJobSpan<T>(
       return result;
     } catch (error) {
       status = "error";
+      safeAttributes["error.message"] = (error instanceof Error ? error.message : String(error)).slice(0, 300);
       throw error;
     } finally {
       const endedAt = Date.now();
