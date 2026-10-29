@@ -63,7 +63,7 @@ Keep `NEXT_PUBLIC_DEMO_MODE=false` for live data. Demo fixtures are disabled aut
 4. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, and `GOOGLE_ALLOWED_EMAIL` in both env files. `GOOGLE_ALLOWED_EMAIL` must be the exact dedicated inbox address.
 5. Create the `AI-NEWSLETTERS` label in Gmail and apply it to the newsletters you want SignalOS to read.
 6. Set `TOKEN_ENCRYPTION_KEY` to a long random secret in both env files. Generate one with the same Node command above.
-7. Restart `npm run dev`, sign in, open `/settings`, and choose **Connect Gmail**. Confirm Google shows the expected account and read-only permission.
+7. Restart `npm run dev`, sign in, then open `http://localhost:3000/api/gmail/start` to authorize the Gmail account. Confirm Google shows the expected account and read-only permission.
 
 `gmail.readonly` is a restricted Google scope. For a private local prototype, keep the OAuth app in testing and authorize only your account. Before making the app public or onboarding other users, check Google's current verification and security-assessment requirements.
 

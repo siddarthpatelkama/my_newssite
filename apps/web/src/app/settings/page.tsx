@@ -17,12 +17,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p className="mt-2 text-sm leading-6 text-mute">
           Scope is read-only. The refresh token is encrypted before it is stored. Demo mode: {demoMode ? "on" : "off"}.
         </p>
-        <a
-          href="/api/gmail/start"
-          className="mt-5 inline-block bg-ink px-5 py-3 text-xs uppercase tracking-[0.2em] text-paper"
-        >
-          Connect Gmail
-        </a>
+        <p className="mt-4 text-sm leading-6 text-mute">
+          After configuring the Google OAuth environment variables, start the one-time mailbox authorization at{" "}
+          <code>/api/gmail/start</code>.
+        </p>
       </section>
 
       <section className="mt-6 border border-rule p-6 text-sm leading-7">
