@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
+import { PageTelemetry } from "@/components/telemetry/PageTelemetry";
 import "./globals.css";
 
 const serif = Fraunces({
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SiteHeader />
           {children}
           <SiteFooter />
+          <PageTelemetry />
         </div>
       </body>
     </html>

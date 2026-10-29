@@ -15,6 +15,7 @@ coverage
 !.vscode/extensions.json
 apps/web/.next
 apps/worker/dist
+supabase/.temp/
 *.tsbuildinfo
 # Google OAuth client downloads contain a client secret.
 client_secret_*.json

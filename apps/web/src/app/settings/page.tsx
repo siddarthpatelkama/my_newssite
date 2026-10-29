@@ -1,7 +1,9 @@
 import { demoMode } from "@/lib/demo";
+import { getTelemetrySummary } from "@/lib/telemetry/summary";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ gmail?: string }> }) {
   const { gmail } = await searchParams;
+  const telemetry = await getTelemetrySummary();
   return (
     <main className="mx-auto max-w-2xl">
       <h1 className="font-serif text-4xl">The newsroom desk</h1>
@@ -30,6 +32,31 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 npm run worker:process
 npm run worker:briefing`}
         </pre>
+      </section>
+
+      <section className="mt-6 border border-rule p-6" aria-labelledby="reading-metrics-heading">
+        <h2 id="reading-metrics-heading" className="font-serif text-2xl">Private reading metrics</h2>
+        <p className="mt-2 text-sm leading-6 text-mute">
+          Last 30 days. We store page visits, visible reading time, scroll bursts, and the feedback buttons you choose.
+          We do not send newsletter text, page text, search terms, or tokens to this metrics table.
+        </p>
+        {telemetry ? (
+          <dl className="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            {[
+              ["Page visits", telemetry.pageViews], ["Reading sessions", telemetry.readingSessions],
+              ["Reading minutes", telemetry.readingMinutes], ["Scroll bursts", telemetry.scrollBursts],
+              ["Max read depth", `${telemetry.maxReadDepth}%`], ["Likes", telemetry.likes],
+              ["Not for me", telemetry.dislikes], ["Understood", telemetry.understood],
+              ["Need more context", telemetry.needsContext],
+            ].map(([label, value]) => (
+              <div key={label} className="border-t border-rule pt-2">
+                <dt className="text-mute">{label}</dt><dd className="mt-1 text-xl">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="mt-4 text-sm text-mute">Metrics will appear after the telemetry database migration is installed.</p>
+        )}
       </section>
     </main>
   );

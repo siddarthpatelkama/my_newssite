@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SourceList } from "@/components/editorial/SourceList";
+import { StoryFeedback } from "@/components/telemetry/StoryFeedback";
 import { getStory } from "@/lib/queries";
 
 export default async function StoryPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,6 +28,7 @@ export default async function StoryPage({ params }: { params: Promise<{ id: stri
       <div className="mt-10">
         <SourceList sources={story.sources} />
       </div>
+      <StoryFeedback storyId={story.id} />
       <Link href="/" className="mt-10 inline-block text-xs uppercase tracking-[0.2em] text-mute">
         ← Back to the edition
       </Link>

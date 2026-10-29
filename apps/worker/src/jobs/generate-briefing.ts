@@ -2,6 +2,7 @@ import { DashboardConfigSchema, type DashboardConfig } from "@signalos/shared";
 import { writeBriefing } from "../ai/gemini";
 import { env } from "../env";
 import { supabase } from "../supabase";
+import { withJobSpan } from "../telemetry";
 
 function fallbackConfig(edition: string, stories: Array<{ id: string; canonical_title: string }>): DashboardConfig {
   return {
@@ -50,13 +51,15 @@ export async function generateDailyBriefing(date = new Date()) {
 
   if (env.GEMINI_API_KEY) {
     try {
-      const generated = await writeBriefing(
-        stories.map((story) => ({
+      const generated = await withJobSpan(
+        "gemini.generate_daily_briefing",
+        { "gen_ai.operation.name": "generate_daily_briefing" },
+        () => writeBriefing(stories.map((story) => ({
           id: story.id,
           title: story.canonical_title,
           summary: story.summary ?? "",
           category: story.category,
-        })),
+        }))),
       );
       const parsed = DashboardConfigSchema.safeParse({
         edition,

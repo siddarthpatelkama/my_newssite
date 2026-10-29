@@ -2,6 +2,7 @@ import { extractEmailArticles, synthesizeStory, clusterTitle } from "../ai/gemin
 import { extractArticlesFromHtml, hashContent, normalizeUrl } from "../gmail/parser";
 import { supabase } from "../supabase";
 import { env } from "../env";
+import { withJobSpan } from "../telemetry";
 
 async function withRetries<T>(fn: () => Promise<T>) {
   let lastError: unknown;
@@ -52,11 +53,13 @@ async function processOneEmail(email: {
 
     if (env.GEMINI_API_KEY) {
       const extracted = await withRetries(() =>
-        extractEmailArticles({
-          subject: email.subject ?? "",
-          sender: sender?.sender_email ?? "unknown",
-          text: email.body_text ?? "",
-        }),
+        withJobSpan("gemini.extract_newsletter", { "gen_ai.operation.name": "extract_newsletter" }, () =>
+          extractEmailArticles({
+            subject: email.subject ?? "",
+            sender: sender?.sender_email ?? "unknown",
+            text: email.body_text ?? "",
+          }),
+        ),
       );
       if (!extracted.keep) {
         const { error } = await supabase.from("emails").update({
@@ -114,11 +117,13 @@ async function processOneEmail(email: {
 
       const synthesized = env.GEMINI_API_KEY
         ? await withRetries(() =>
-            synthesizeStory({
-              title: articleRow.title,
-              content: articleRow.content_text ?? article.title,
-              url: articleRow.canonical_url ?? undefined,
-            }),
+            withJobSpan("gemini.synthesize_story", { "gen_ai.operation.name": "synthesize_story" }, () =>
+              synthesizeStory({
+                title: articleRow.title,
+                content: articleRow.content_text ?? article.title,
+                url: articleRow.canonical_url ?? undefined,
+              }),
+            ),
           )
         : {
             title: article.title,
@@ -132,9 +137,8 @@ async function processOneEmail(email: {
           };
 
       const matchTitle = env.GEMINI_API_KEY
-        ? await clusterTitle(
-            synthesized.title,
-            (existingStories ?? []).map((story) => story.canonical_title),
+        ? await withJobSpan("gemini.cluster_title", { "gen_ai.operation.name": "cluster_title" }, () =>
+            clusterTitle(synthesized.title, (existingStories ?? []).map((story) => story.canonical_title)),
           )
         : null;
 
