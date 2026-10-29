@@ -1,0 +1,25 @@
+{
+  "name": "signalos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Personal AI newsletter intelligence platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @signalos/web",
+    "dev:web": "npm run dev -w @signalos/web",
+    "dev:worker": "npm run dev -w @signalos/worker",
+    "build": "npm run build -w @signalos/web",
+    "lint": "npm run lint -w @signalos/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "worker:sync": "npm run sync -w @signalos/worker",
+    "worker:process": "npm run process -w @signalos/worker",
+    "worker:briefing": "npm run briefing -w @signalos/worker",
+    "worker:backfill": "npm run backfill -w @signalos/worker"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

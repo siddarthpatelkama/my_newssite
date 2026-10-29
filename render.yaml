@@ -1,0 +1,66 @@
+services:
+  - type: cron
+    name: signalos-gmail-sync
+    runtime: node
+    plan: 0.5c-512mb
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm run worker:sync
+    schedule: "*/10 * * * *"
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_ALLOWED_EMAIL
+        value: vtu28319@gmail.com
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: NEWSLETTER_LABEL
+        value: AI-NEWSLETTERS
+      - key: MAX_EMAILS_PER_SYNC
+        value: "50"
+  - type: cron
+    name: signalos-news-processing
+    runtime: node
+    plan: 0.5c-512mb
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm run worker:process
+    schedule: "*/10 * * * *"
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: MAX_AI_RETRIES
+        value: "3"
+  - type: cron
+    name: signalos-daily-briefing
+    runtime: node
+    plan: 0.5c-512mb
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm run worker:briefing
+    schedule: "0 3 * * *"
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash

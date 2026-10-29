@@ -1,0 +1,30 @@
+{
+  "name": "@signalos/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts process",
+    "sync": "tsx src/index.ts sync",
+    "process": "tsx src/index.ts process",
+    "briefing": "tsx src/index.ts briefing",
+    "backfill": "tsx src/index.ts backfill",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"no lint\"",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@signalos/shared": "*",
+    "@supabase/supabase-js": "^2.49.1",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.7",
+    "googleapis": "^144.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

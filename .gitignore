@@ -1,0 +1,20 @@
+node_modules
+.pnpm-store
+.next
+dist
+.turbo
+.vercel
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+coverage
+.idea
+.vscode/*
+!.vscode/extensions.json
+apps/web/.next
+apps/worker/dist
+*.tsbuildinfo
+# Google OAuth client downloads contain a client secret.
+client_secret_*.json
