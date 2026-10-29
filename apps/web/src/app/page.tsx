@@ -18,6 +18,11 @@ export default async function HomePage() {
         title={briefing.title}
         introduction={briefing.introduction}
       />
+      {!stories.length ? (
+        <p className="mx-auto max-w-2xl border border-rule p-6 text-center leading-7 text-ink/75">
+          Your live edition will appear here after Gmail is connected and the newsletter sync and processing jobs have run.
+        </p>
+      ) : null}
       {lead ? <LeadStory story={lead} /> : null}
 
       <div className="mt-10 grid gap-10 md:grid-cols-3">

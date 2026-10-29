@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <LoginForm nextPath={next ?? "/"} />
       ) : (
         <p className="mt-8 border border-rule p-5 text-sm leading-7">
-          Add <code>APP_PASSWORD</code> and <code>APP_SESSION_SECRET</code> to <code>apps/web/.env.local</code>, then restart the web app.
+          Site setup is incomplete. Configure <code>APP_PASSWORD</code> and <code>APP_SESSION_SECRET</code> in this deployment&apos;s environment settings, then redeploy.
         </p>
       )}
     </main>

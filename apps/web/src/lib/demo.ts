@@ -1,4 +1,6 @@
-export const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+// Demo fixtures are opt-in for local development and can never be enabled in production.
+export const demoMode =
+  process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 export const demoStories = [
   {

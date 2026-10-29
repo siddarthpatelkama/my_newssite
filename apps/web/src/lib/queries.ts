@@ -68,7 +68,7 @@ function mapArticle(article: {
 export async function getStories(): Promise<StoryRecord[]> {
   if (demoMode) return demoStories;
   const supabase = createAdminSupabase();
-  if (!supabase) return demoStories;
+  if (!supabase) return [];
 
   const { data: stories, error } = await supabase
     .from("stories")
@@ -78,7 +78,12 @@ export async function getStories(): Promise<StoryRecord[]> {
     .order("last_updated_at", { ascending: false })
     .limit(40);
 
-  if (error || !stories?.length) return demoStories;
+  if (error) {
+    console.error("Unable to load stories from Supabase:", error.message);
+    return [];
+  }
+
+  if (!stories?.length) return [];
 
   return (stories as unknown as StoryRow[]).map((story) => ({
     id: story.id,
@@ -108,9 +113,21 @@ export async function getStory(id: string) {
 export async function getBriefing(stories: StoryRecord[]) {
   if (demoMode) return demoBriefing;
   const supabase = createAdminSupabase();
-  if (!supabase) return demoBriefing;
+  const emptyBriefing = () => ({
+    editionDate: new Date().toISOString().slice(0, 10),
+    title: stories.length ? "Your daily edition" : "Your first edition is on its way",
+    introduction: stories.length
+      ? "A live edition assembled from your newsletter stories."
+      : "No newsletter stories are available yet. Connect Gmail, label newsletters, and run the sync and processing jobs to populate this edition.",
+    layout: "balanced" as const,
+    sections: stories.length
+      ? [{ type: "top_stories" as const, title: "From your newsletters", storyIds: stories.slice(0, 6).map((story) => story.id) }]
+      : [],
+  });
 
-  const { data } = await supabase
+  if (!supabase) return emptyBriefing();
+
+  const { data, error } = await supabase
     .from("daily_briefings")
     .select("edition_date, title, introduction, sections, dashboard_configs(config)")
     .eq("status", "published")
@@ -118,18 +135,12 @@ export async function getBriefing(stories: StoryRecord[]) {
     .limit(1)
     .maybeSingle();
 
-  if (!data) {
-    return {
-      ...demoBriefing,
-      sections: [
-        {
-          type: "top_stories" as const,
-          title: "The important developments",
-          storyIds: stories.slice(0, 6).map((story) => story.id),
-        },
-      ],
-    };
+  if (error) {
+    console.error("Unable to load the published briefing from Supabase:", error.message);
+    return emptyBriefing();
   }
+
+  if (!data) return emptyBriefing();
 
   const configRow = data.dashboard_configs as { config?: typeof demoBriefing } | { config?: typeof demoBriefing }[] | null;
   const config = Array.isArray(configRow) ? configRow[0]?.config : configRow?.config;

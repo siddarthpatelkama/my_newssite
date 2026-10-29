@@ -12,7 +12,7 @@ The AI interprets newsletters. PostgreSQL remembers. The website renders allowli
 4. Uses Gemini (when configured) to summarize, classify, and cluster.
 5. Publishes a daily edition to a typography-first Next.js paper.
 
-Demo mode is on by default so the editorial UI is readable before credentials exist. The app is protected by a single app password; Gmail and story data are not public.
+Demo fixtures are opt-in for local development and are always disabled in production. The app is protected by a single app password; Gmail and story data are not public.
 
 ## Stack
 
@@ -39,7 +39,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 Run the command twice and use one value for each setting. Keep both values private.
 
-Open [http://localhost:3000](http://localhost:3000), sign in with the app password, and you should see the daily edition in demo mode.
+Open [http://localhost:3000](http://localhost:3000), sign in with the app password. Without connected data, the site shows an empty state. Set `NEXT_PUBLIC_DEMO_MODE=true` locally only if you want to preview the sample stories.
 
 ### 1. Database
 
@@ -53,7 +53,7 @@ If you already ran `0001_init.sql`, run only the second migration.
 
 Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in both `apps\web\.env.local` and `apps\worker\.env`. Keep the service role key server-side; never prefix it with `NEXT_PUBLIC_`.
 
-Turn `NEXT_PUBLIC_DEMO_MODE` to `false` once live stories exist.
+Keep `NEXT_PUBLIC_DEMO_MODE=false` for live data. Demo fixtures are disabled automatically in production.
 
 ### 2. Gmail
 

@@ -34,6 +34,7 @@ export default async function SearchPage({
           <StoryCard key={story.id} story={story} />
         ))}
       </div>
+      {!results.length ? <p className="mt-10 text-mute">No newsletter stories match yet.</p> : null}
     </main>
   );
 }

@@ -14,6 +14,7 @@ export default async function FeedPage() {
           <StoryCard key={story.id} story={story} />
         ))}
       </div>
+      {!stories.length ? <p className="mt-10 text-mute">No newsletter stories have been imported yet.</p> : null}
     </main>
   );
 }
