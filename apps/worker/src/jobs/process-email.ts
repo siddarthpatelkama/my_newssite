@@ -21,7 +21,7 @@ export async function processPendingEmails(limit = 10) {
   await supabase
     .from("emails")
     .update({ processing_status: "pending", next_retry_at: null, processing_attempts: 0 })
-    .eq("processing_status", "failed");
+    .in("processing_status", ["failed", "ignored"]);
   const { data: claimed, error } = await supabase.rpc("claim_pending_emails", { p_limit: limit });
   if (error) throw error;
   const ids: string[] = (claimed ?? []).map((email: { id: string }) => email.id);
@@ -81,6 +81,14 @@ async function processOneEmail(email: {
           contentHash: hashContent(`${article.canonicalUrl ? normalizeUrl(article.canonicalUrl) ?? "" : ""}\n${article.contentText}`),
         }));
       }
+    }
+
+    if (articles.length === 0 && (email.body_text?.trim() || email.subject?.trim())) {
+      articles = [{
+        title: email.subject || "Newsletter Intelligence",
+        contentText: (email.body_text || email.subject || "").slice(0, 5000),
+        contentHash: hashContent((email.body_text || email.subject || "").slice(0, 500)),
+      }];
     }
 
     const { data: existingStories } = await supabase

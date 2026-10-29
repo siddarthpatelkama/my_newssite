@@ -61,13 +61,14 @@ export async function extractEmailArticles(input: {
   const raw = await generateJson(
     `${SYSTEM_GUARD}
 
-Extract useful article sections from this newsletter. Discard ads, unsubscribe copy, and tracking noise.
+Extract useful article sections and intelligence topics from this newsletter email.
+Always set "keep": true unless the email is completely empty.
 Subject: ${input.subject}
 Sender: ${input.sender}
 Body:
 ${input.text.slice(0, 12000)}
 
-Return JSON: { "keep": boolean, "reason": string, "articles": [{ "title": string, "canonicalUrl"?: string, "sourceName"?: string, "contentText": string }] }`,
+Return JSON: { "keep": true, "reason": "Curated newsletter content", "articles": [{ "title": string, "canonicalUrl"?: string, "sourceName"?: string, "contentText": string }] }`,
   );
   return ExtractedEmailSchema.parse(raw);
 }
