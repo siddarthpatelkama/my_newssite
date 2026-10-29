@@ -1,4 +1,4 @@
-import { extractEmailArticles, synthesizeStory, clusterTitle } from "../ai/gemini";
+import { extractEmailArticles, synthesizeStory, clusterTitle, hasGeminiKey } from "../ai/gemini";
 import { extractArticlesFromHtml, hashContent, normalizeUrl } from "../gmail/parser";
 import { supabase } from "../supabase";
 import { env } from "../env";
@@ -57,7 +57,7 @@ async function processOneEmail(email: {
     const heuristic = extractArticlesFromHtml(email.body_html ?? "", email.body_text ?? "");
     let articles = heuristic;
 
-    if (env.GEMINI_API_KEY) {
+    if (hasGeminiKey()) {
       const emailContent = (email.body_text || email.body_html || "").slice(0, 12000);
       const extracted = await withRetries(() =>
         withJobSpan("gemini.extract_newsletter", { "gen_ai.operation.name": "extract_newsletter" }, () =>
@@ -130,7 +130,7 @@ async function processOneEmail(email: {
       }
       if (!articleRow) continue;
 
-      const synthesized = env.GEMINI_API_KEY
+      const synthesized = hasGeminiKey()
         ? await withRetries(() =>
             withJobSpan("gemini.synthesize_story", { "gen_ai.operation.name": "synthesize_story" }, () =>
               synthesizeStory({
@@ -151,7 +151,7 @@ async function processOneEmail(email: {
             sourceClaims: [],
           };
 
-      const matchTitle = env.GEMINI_API_KEY
+      const matchTitle = hasGeminiKey()
         ? await withJobSpan("gemini.cluster_title", { "gen_ai.operation.name": "cluster_title" }, () =>
             clusterTitle(synthesized.title, (existingStories ?? []).map((story) => story.canonical_title)),
           ).catch((e) => {

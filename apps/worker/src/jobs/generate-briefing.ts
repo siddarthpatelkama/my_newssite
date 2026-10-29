@@ -1,5 +1,5 @@
 import { DashboardConfigSchema, LAYOUT_VARIANTS, SECTION_TYPES, type DashboardConfig } from "@signalos/shared";
-import { writeBriefing } from "../ai/gemini";
+import { writeBriefing, hasGeminiKey } from "../ai/gemini";
 import { env } from "../env";
 import { supabase } from "../supabase";
 import { withJobSpan } from "../telemetry";
@@ -58,7 +58,7 @@ export async function generateDailyBriefing(date = new Date()) {
   let title = `SignalOS · ${edition}`;
   let introduction = "A curated view of developments across your newsletters.";
 
-  if (env.GEMINI_API_KEY) {
+  if (hasGeminiKey()) {
     try {
       const generated = await withJobSpan(
         "gemini.generate_daily_briefing",

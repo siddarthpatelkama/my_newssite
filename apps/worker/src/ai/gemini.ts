@@ -9,11 +9,42 @@ import {
 } from "@signalos/shared";
 import { env } from "../env";
 
-function client() {
-  if (!env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is required for intelligence processing");
+export function getApiKeys(): string[] {
+  const combined = [
+    env.GEMINI_API_KEYS,
+    process.env.GEMINI_API_KEYS,
+    env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY,
+  ]
+    .filter(Boolean)
+    .join(",");
+  const keys = combined
+    .split(/[\r\n,]+/)
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+  return [...new Set(keys)];
+}
+
+export function hasGeminiKey(): boolean {
+  return getApiKeys().length > 0;
+}
+
+let keyCursor = 0;
+
+function maskKey(key: string): string {
+  if (key.length <= 10) return "***";
+  return `${key.slice(0, 6)}...${key.slice(-4)}`;
+}
+
+export function getNextApiKey(): { key: string; index: number; total: number } {
+  const keys = getApiKeys();
+  if (keys.length === 0) {
+    throw new Error("GEMINI_API_KEY or GEMINI_API_KEYS is required for intelligence processing");
   }
-  return new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+  const index = keyCursor % keys.length;
+  const key = keys[index]!;
+  keyCursor = (keyCursor + 1) % keys.length;
+  return { key, index: index + 1, total: keys.length };
 }
 
 const SYSTEM_GUARD =
@@ -32,30 +63,55 @@ function getTargetModels(): string[] {
 }
 
 async function generateJson(prompt: string) {
-  const ai = client();
+  const keys = getApiKeys();
+  if (keys.length === 0) {
+    throw new Error("GEMINI_API_KEY or GEMINI_API_KEYS is required for intelligence processing");
+  }
+
   const candidateModels = getTargetModels();
   let lastError: unknown;
 
-  for (const model of candidateModels) {
-    try {
-      console.log(`[Gemini] Calling model: ${model}...`);
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-          systemInstruction: SYSTEM_GUARD,
-        },
-      });
-      const text = response.text;
-      if (!text) throw new Error("Gemini returned an empty response");
-      console.log(`[Gemini] Model ${model} succeeded (${text.length} chars)`);
-      return JSON.parse(text) as unknown;
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[Gemini] Model ${model} failed: ${message}. Trying fallback...`);
+  // Round-robin across keys in series order.
+  // If a key hits rate-limit or quota exceeded (429 / RESOURCE_EXHAUSTED), rotate to the next key immediately.
+  const totalKeys = keys.length;
+  const attempts = Math.max(1, totalKeys);
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const { key, index, total } = getNextApiKey();
+    const masked = maskKey(key);
+    const ai = new GoogleGenAI({ apiKey: key });
+
+    for (const model of candidateModels) {
+      try {
+        console.log(`[Gemini] Calling ${model} with key #${index}/${total} (${masked})...`);
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            temperature: 0.2,
+            responseMimeType: "application/json",
+            systemInstruction: SYSTEM_GUARD,
+          },
+        });
+        const text = response.text;
+        if (!text) throw new Error("Gemini returned an empty response");
+        console.log(`[Gemini] ${model} with key #${index} succeeded (${text.length} chars)`);
+        return JSON.parse(text) as unknown;
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[Gemini] Key #${index} (${masked}) failed on ${model}: ${message}`);
+
+        if (
+          message.includes("429") ||
+          message.includes("RESOURCE_EXHAUSTED") ||
+          message.includes("quota") ||
+          message.includes("rate limit")
+        ) {
+          console.warn(`[Gemini] Quota/rate-limit hit on key #${index}. Rotating to next API key immediately...`);
+          break; // Break model loop, advance to next key in key loop
+        }
+      }
     }
   }
 

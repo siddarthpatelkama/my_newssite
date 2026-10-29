@@ -10,7 +10,8 @@ const EnvSchema = z.object({
   SUPABASE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_API_KEYS: z.string().optional(),
   GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
@@ -27,6 +28,7 @@ const parsed = EnvSchema.parse(process.env);
 export const env = {
   ...parsed,
   supabaseUrl: parsed.SUPABASE_URL ?? parsed.NEXT_PUBLIC_SUPABASE_URL,
+  hasGeminiKey: Boolean(parsed.GEMINI_API_KEY?.trim() || parsed.GEMINI_API_KEYS?.trim()),
 };
 
 if (!env.supabaseUrl) {
