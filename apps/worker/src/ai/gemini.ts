@@ -1,5 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
-import { ExtractedEmailSchema, ExtractedStorySchema, STORY_CATEGORIES, type ExtractedStory } from "@signalos/shared";
+import {
+  ExtractedEmailSchema,
+  ExtractedStorySchema,
+  LAYOUT_VARIANTS,
+  SECTION_TYPES,
+  STORY_CATEGORIES,
+  type ExtractedStory,
+} from "@signalos/shared";
 import { env } from "../env";
 
 function client() {
@@ -15,10 +22,12 @@ const SYSTEM_GUARD =
 function getTargetModels(): string[] {
   const configured = env.GEMINI_MODEL?.trim();
   const models: string[] = [];
-  if (configured && !configured.includes("3.8") && !configured.includes("1.5")) {
+  // Exclude legacy deprecated models
+  if (configured && !configured.includes("2.0") && !configured.includes("1.5")) {
     models.push(configured);
   }
-  models.push("gemini-2.5-flash", "gemini-2.0-flash");
+  // Confirmed active models with fastest response and highest availability
+  models.push("gemini-3.8-flash", "gemini-2.5-flash", "gemini-flash-latest");
   return [...new Set(models)];
 }
 
@@ -70,7 +79,26 @@ ${input.text.slice(0, 12000)}
 
 Return JSON: { "keep": true, "reason": "Curated newsletter content", "articles": [{ "title": string, "canonicalUrl"?: string, "sourceName"?: string, "contentText": string }] }`,
   );
-  return ExtractedEmailSchema.parse(raw);
+
+  const obj = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, any>;
+  const normalized = {
+    keep: obj.keep !== false,
+    reason: String(obj.reason || "Curated newsletter content"),
+    articles: Array.isArray(obj.articles)
+      ? obj.articles.map((a: any) => {
+          const rawUrl = typeof a?.canonicalUrl === "string" ? a.canonicalUrl.trim() : "";
+          const isValidUrl = rawUrl.startsWith("http://") || rawUrl.startsWith("https://");
+          return {
+            title: String(a?.title || input.subject || "Untitled Article"),
+            canonicalUrl: isValidUrl ? rawUrl : undefined,
+            sourceName: typeof a?.sourceName === "string" ? a.sourceName : undefined,
+            contentText: String(a?.contentText || a?.content || input.text.slice(0, 1000)),
+          };
+        })
+      : [],
+  };
+
+  return ExtractedEmailSchema.parse(normalized);
 }
 
 export async function synthesizeStory(input: {
@@ -151,9 +179,24 @@ Return JSON: { "match": string | null }`,
 
 export async function writeBriefing(stories: Array<{ id: string; title: string; summary: string; category: string | null }>) {
   const raw = await generateJson(
-    `Write a daily editorial briefing from these stories. Choose layout research_focus, balanced, or engineering_focus.
+    `Write a daily editorial briefing from these stories.
+Choose layout from: ${JSON.stringify(LAYOUT_VARIANTS)}.
+Choose section type from: ${JSON.stringify(SECTION_TYPES)}.
+
 Stories: ${JSON.stringify(stories)}
-Return JSON: { "title": string, "introduction": string, "layout": string, "sections": [{ "type": string, "title": string, "storyIds": string[] }] }
+Return JSON with this schema:
+{
+  "title": string,
+  "introduction": string,
+  "layout": "balanced",
+  "sections": [
+    {
+      "type": "top_stories",
+      "title": string,
+      "storyIds": string[]
+    }
+  ]
+}
 Use only the provided story ids.`,
   );
   return raw as {

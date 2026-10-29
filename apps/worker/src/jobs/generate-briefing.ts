@@ -1,4 +1,4 @@
-import { DashboardConfigSchema, type DashboardConfig } from "@signalos/shared";
+import { DashboardConfigSchema, LAYOUT_VARIANTS, SECTION_TYPES, type DashboardConfig } from "@signalos/shared";
 import { writeBriefing } from "../ai/gemini";
 import { env } from "../env";
 import { supabase } from "../supabase";
@@ -33,7 +33,7 @@ export async function generateDailyBriefing(date = new Date()) {
   const since = new Date(date);
   since.setUTCDate(since.getUTCDate() - 2);
 
-  const { data: stories, error } = await supabase
+  let { data: stories, error } = await supabase
     .from("stories")
     .select("id, canonical_title, summary, category")
     .gte("last_updated_at", since.toISOString())
@@ -41,6 +41,15 @@ export async function generateDailyBriefing(date = new Date()) {
     .limit(12);
 
   if (error) throw error;
+  if (!stories?.length) {
+    const { data: fallbackStories } = await supabase
+      .from("stories")
+      .select("id, canonical_title, summary, category")
+      .order("last_updated_at", { ascending: false })
+      .limit(12);
+    stories = fallbackStories ?? [];
+  }
+
   if (!stories?.length) {
     return { skipped: true, reason: "no stories" };
   }
@@ -54,23 +63,41 @@ export async function generateDailyBriefing(date = new Date()) {
       const generated = await withJobSpan(
         "gemini.generate_daily_briefing",
         { "gen_ai.operation.name": "generate_daily_briefing" },
-        () => writeBriefing(stories.map((story) => ({
-          id: story.id,
-          title: story.canonical_title,
-          summary: story.summary ?? "",
-          category: story.category,
-        }))),
+        () =>
+          writeBriefing(
+            stories.map((story) => ({
+              id: story.id,
+              title: story.canonical_title,
+              summary: story.summary ?? "",
+              category: story.category,
+            })),
+          ),
       );
+
+      const validLayout = (LAYOUT_VARIANTS as readonly string[]).includes(generated?.layout)
+        ? (generated.layout as (typeof LAYOUT_VARIANTS)[number])
+        : "balanced";
+
+      const validSections = (generated?.sections || [])
+        .map((sec: any) => ({
+          type: (SECTION_TYPES as readonly string[]).includes(sec?.type) ? sec.type : "top_stories",
+          title: String(sec?.title || "Top Developments"),
+          storyIds: Array.isArray(sec?.storyIds)
+            ? sec.storyIds.filter((id: string) => stories.some((s) => s.id === id))
+            : [],
+        }))
+        .filter((sec: any) => sec.storyIds.length > 0);
+
       const parsed = DashboardConfigSchema.safeParse({
         edition,
-        layout: generated.layout,
-        sections: generated.sections,
+        layout: validLayout,
+        sections: validSections.length > 0 ? validSections : fallbackConfig(edition, stories).sections,
       });
       if (parsed.success) config = parsed.data;
       title = generated.title || title;
       introduction = generated.introduction || introduction;
-    } catch {
-      // Keep the fallback layout when the model output is invalid.
+    } catch (e) {
+      console.warn("[generateDailyBriefing] Error generating AI briefing, using fallback:", e);
     }
   }
 

@@ -17,11 +17,13 @@ async function withRetries<T>(fn: () => Promise<T>) {
   throw lastError;
 }
 
-export async function processPendingEmails(limit = 10) {
+export async function processPendingEmails(limit = env.MAX_EMAILS_PER_SYNC || 50) {
+  // Re-queue any previously failed or ignored emails so they are processed with the active Gemini model
   await supabase
     .from("emails")
     .update({ processing_status: "pending", next_retry_at: null, processing_attempts: 0 })
     .in("processing_status", ["failed", "ignored"]);
+
   const { data: claimed, error } = await supabase.rpc("claim_pending_emails", { p_limit: limit });
   if (error) throw error;
   const ids: string[] = (claimed ?? []).map((email: { id: string }) => email.id);
@@ -56,12 +58,13 @@ async function processOneEmail(email: {
     let articles = heuristic;
 
     if (env.GEMINI_API_KEY) {
+      const emailContent = (email.body_text || email.body_html || "").slice(0, 12000);
       const extracted = await withRetries(() =>
         withJobSpan("gemini.extract_newsletter", { "gen_ai.operation.name": "extract_newsletter" }, () =>
           extractEmailArticles({
             subject: email.subject ?? "",
             sender: sender?.sender_email ?? "unknown",
-            text: email.body_text ?? "",
+            text: emailContent,
           }),
         ),
       );
@@ -151,7 +154,10 @@ async function processOneEmail(email: {
       const matchTitle = env.GEMINI_API_KEY
         ? await withJobSpan("gemini.cluster_title", { "gen_ai.operation.name": "cluster_title" }, () =>
             clusterTitle(synthesized.title, (existingStories ?? []).map((story) => story.canonical_title)),
-          )
+          ).catch((e) => {
+            console.warn(`[clusterTitle] Error clustering title, creating as new story:`, e);
+            return null;
+          })
         : null;
 
       const matched = existingStories?.find((story) => story.canonical_title === matchTitle);
@@ -207,7 +213,12 @@ async function processOneEmail(email: {
     }).eq("id", email.id);
     if (processedError) throw processedError;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null
+        ? JSON.stringify(error)
+        : String(error);
     const retryMinutes = Math.min(60, 2 ** Math.max(0, email.processing_attempts - 1));
     const { error: failureError } = await supabase
       .from("emails")
