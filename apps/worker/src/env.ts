@@ -15,7 +15,7 @@ const EnvSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   TOKEN_ENCRYPTION_KEY: z.string().optional(),
-  NEWSLETTER_LABEL: z.string().default("AI-NEWSLETTERS"),
+  NEWSLETTER_LABEL: z.string().default("INBOX"),
   MAX_EMAILS_PER_SYNC: z.coerce.number().default(50),
   MAX_AI_RETRIES: z.coerce.number().default(3),
   MAX_BACKFILL: z.coerce.number().default(100),

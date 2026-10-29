@@ -22,7 +22,7 @@ async function upsertNewsletter(senderEmail: string, senderName: string | null) 
   return data.id as string;
 }
 
-async function upsertEmail(messageId: string, newsletterLabelId: string) {
+async function upsertEmail(messageId: string, newsletterLabelId: string | null) {
   const existing = await supabase
     .from("emails")
     .select("id")
@@ -31,7 +31,7 @@ async function upsertEmail(messageId: string, newsletterLabelId: string) {
   if (existing.data?.id) return { inserted: false };
 
   const message = await getMessage(messageId);
-  if (!message.labelIds?.includes(newsletterLabelId)) return { inserted: false };
+  if (newsletterLabelId && !message.labelIds?.includes(newsletterLabelId)) return { inserted: false };
   const headers = headerMap(message);
   const from = parseFrom(headers.get("from"));
   const bodies = decodeMessageBodies(message);

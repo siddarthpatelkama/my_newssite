@@ -23,7 +23,7 @@ services:
       - key: GOOGLE_REDIRECT_URI
         sync: false
       - key: NEWSLETTER_LABEL
-        value: AI-NEWSLETTERS
+        value: INBOX
       - key: MAX_EMAILS_PER_SYNC
         value: "50"
   - type: cron

@@ -26,7 +26,10 @@ export async function getGmailClient() {
 
 export async function listNewsletterMessageIds(maxResults = env.MAX_EMAILS_PER_SYNC) {
   const gmail = await getGmailClient();
-  const q = `label:${env.NEWSLETTER_LABEL}`;
+  const label = env.NEWSLETTER_LABEL?.trim();
+  const isInbox = !label || label.toUpperCase() === "INBOX";
+  const isAll = label?.toUpperCase() === "ALL";
+  const q = isAll ? "" : (isInbox ? "label:INBOX" : `label:${label}`);
   const ids: string[] = [];
   let pageToken: string | undefined;
 
@@ -47,12 +50,21 @@ export async function listNewsletterMessageIds(maxResults = env.MAX_EMAILS_PER_S
   return ids;
 }
 
-export async function getNewsletterLabelId() {
+export async function getNewsletterLabelId(): Promise<string | null> {
+  const labelName = env.NEWSLETTER_LABEL?.trim();
+  if (!labelName || labelName.toUpperCase() === "ALL") {
+    return null;
+  }
+  if (labelName.toUpperCase() === "INBOX") {
+    return "INBOX";
+  }
   const gmail = await getGmailClient();
   const res = await gmail.users.labels.list({ userId: "me" });
-  const label = res.data.labels?.find((item) => item.name === env.NEWSLETTER_LABEL);
+  const label = res.data.labels?.find(
+    (item) => item.name?.toLowerCase() === labelName.toLowerCase() || item.id?.toLowerCase() === labelName.toLowerCase()
+  );
   if (!label?.id) {
-    throw new Error(`Gmail label "${env.NEWSLETTER_LABEL}" was not found. Create it and label the newsletters first.`);
+    throw new Error(`Gmail label "${labelName}" was not found. Create it and label the newsletters first, or set NEWSLETTER_LABEL=INBOX.`);
   }
   return label.id;
 }
