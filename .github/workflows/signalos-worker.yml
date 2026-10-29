@@ -1,0 +1,39 @@
+name: SignalOS Background Worker
+
+on:
+  schedule:
+    # Runs every hour at minute 0 (24 times a day, 100% free within GitHub Actions limits)
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    # Allows manual trigger at any time from the GitHub Actions tab
+
+jobs:
+  run-worker:
+    name: Sync, Process & Briefing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run SignalOS Worker Pipeline (Sync -> Gemini -> Briefing)
+        run: npm run worker:run
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
+          NEWSLETTER_LABEL: ${{ secrets.NEWSLETTER_LABEL || 'INBOX' }}

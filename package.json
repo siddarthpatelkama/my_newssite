@@ -17,7 +17,8 @@
     "worker:sync": "npm run sync -w @signalos/worker",
     "worker:process": "npm run process -w @signalos/worker",
     "worker:briefing": "npm run briefing -w @signalos/worker",
-    "worker:backfill": "npm run backfill -w @signalos/worker"
+    "worker:backfill": "npm run backfill -w @signalos/worker",
+    "worker:run": "npm run run -w @signalos/worker"
   },
   "engines": {
     "node": ">=20"

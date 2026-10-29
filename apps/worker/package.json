@@ -9,6 +9,7 @@
     "process": "tsx src/index.ts process",
     "briefing": "tsx src/index.ts briefing",
     "backfill": "tsx src/index.ts backfill",
+    "run": "tsx src/index.ts run",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"no lint\"",
     "build": "tsc --noEmit"
