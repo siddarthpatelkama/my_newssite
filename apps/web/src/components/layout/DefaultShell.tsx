@@ -14,3 +14,4 @@ export function DefaultShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+

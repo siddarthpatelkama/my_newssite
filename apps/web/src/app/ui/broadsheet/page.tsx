@@ -9,3 +9,4 @@ export default async function BroadsheetPage() {
 
   return <BroadsheetTheme stories={stories} briefing={briefing} />;
 }
+

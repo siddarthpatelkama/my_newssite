@@ -9,3 +9,4 @@ export default async function SwissGridPage() {
 
   return <SwissGridTheme stories={stories} briefing={briefing} />;
 }
+

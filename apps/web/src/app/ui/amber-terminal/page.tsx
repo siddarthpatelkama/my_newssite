@@ -9,3 +9,4 @@ export default async function AmberTerminalPage() {
 
   return <AmberTerminalTheme stories={stories} briefing={briefing} />;
 }
+

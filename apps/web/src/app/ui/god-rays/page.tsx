@@ -9,3 +9,4 @@ export default async function GodRaysPage() {
 
   return <GodRaysTheme stories={stories} briefing={briefing} />;
 }
+

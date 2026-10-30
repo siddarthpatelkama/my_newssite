@@ -9,3 +9,4 @@ export default async function NordicSlatePage() {
 
   return <NordicSlateTheme stories={stories} briefing={briefing} />;
 }
+

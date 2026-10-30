@@ -9,3 +9,4 @@ export default async function KyotoSandPage() {
 
   return <KyotoSandTheme stories={stories} briefing={briefing} />;
 }
+
