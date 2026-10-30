@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export type ThemeId =
-  | "god-rays"
-  | "tokyo-night"
+  | "diwali"
+  | "kyoto-sand"
+  | "nordic-slate"
   | "broadsheet"
   | "swiss-grid"
-  | "nordic-slate"
-  | "amber-terminal"
-  | "kyoto-sand";
+  | "god-rays"
+  | "tokyo-night"
+  | "amber-terminal";
 
 export const THEMES: Array<{
   id: ThemeId;
@@ -22,20 +23,28 @@ export const THEMES: Array<{
   accentColor: string;
 }> = [
   {
-    id: "god-rays",
-    name: "God Rays",
-    tagline: "Volumetric celestial light rays over deep obsidian",
-    path: "/ui/god-rays",
-    dotColor: "#fbbf24",
+    id: "diwali",
+    name: "🪔 Diwali",
+    tagline: "Festival of Lights: floating earthen diyas, royal purple night sky & golden embers",
+    path: "/ui/diwali",
+    dotColor: "#f59e0b",
     accentColor: "from-amber-400 to-yellow-200",
   },
   {
-    id: "tokyo-night",
-    name: "Tokyo Night",
-    tagline: "Cyber-linear engineering console in midnight indigo",
-    path: "/ui/tokyo-night",
-    dotColor: "#38bdf8",
-    accentColor: "from-sky-400 to-cyan-200",
+    id: "kyoto-sand",
+    name: "Kyoto Sand",
+    tagline: "Wabi-sabi river sand, floating washi cards & sumi ink",
+    path: "/ui/kyoto-sand",
+    dotColor: "#4d5d4b",
+    accentColor: "from-stone-400 to-emerald-800",
+  },
+  {
+    id: "nordic-slate",
+    name: "Nordic Slate",
+    tagline: "Basalt slate, misty sage eucalyptus & quiet hygge comfort",
+    path: "/ui/nordic-slate",
+    dotColor: "#84a98c",
+    accentColor: "from-emerald-400 to-teal-300",
   },
   {
     id: "broadsheet",
@@ -54,12 +63,20 @@ export const THEMES: Array<{
     accentColor: "from-neutral-200 to-white",
   },
   {
-    id: "nordic-slate",
-    name: "Nordic Slate",
-    tagline: "Basalt slate, misty sage eucalyptus & quiet hygge comfort",
-    path: "/ui/nordic-slate",
-    dotColor: "#84a98c",
-    accentColor: "from-emerald-400 to-teal-300",
+    id: "god-rays",
+    name: "God Rays",
+    tagline: "Volumetric celestial light rays over deep obsidian",
+    path: "/ui/god-rays",
+    dotColor: "#fbbf24",
+    accentColor: "from-amber-400 to-yellow-200",
+  },
+  {
+    id: "tokyo-night",
+    name: "Tokyo Night",
+    tagline: "Cyber-linear engineering console in midnight indigo",
+    path: "/ui/tokyo-night",
+    dotColor: "#38bdf8",
+    accentColor: "from-sky-400 to-cyan-200",
   },
   {
     id: "amber-terminal",
@@ -68,14 +85,6 @@ export const THEMES: Array<{
     path: "/ui/amber-terminal",
     dotColor: "#f59e0b",
     accentColor: "from-amber-500 to-orange-400",
-  },
-  {
-    id: "kyoto-sand",
-    name: "Kyoto Sand",
-    tagline: "Wabi-sabi river sand, floating washi cards & sumi ink",
-    path: "/ui/kyoto-sand",
-    dotColor: "#4d5d4b",
-    accentColor: "from-stone-400 to-emerald-800",
   },
 ];
 
