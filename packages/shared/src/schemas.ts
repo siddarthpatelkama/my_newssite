@@ -51,7 +51,15 @@ export const ThemeSpecSchema = z.object({
     crimson: z.string(),
     mute: z.string(),
   }),
+  typography: z
+    .object({
+      headline: z.string().optional(),
+      body: z.string().optional(),
+    })
+    .optional(),
   atmosphere: z.enum(["none", "god_rays", "cyber_grid", "diwali_glow", "sand_grain"]).default("none"),
+  keywords: z.array(z.string()).default([]),
+  layoutStyle: z.string().optional(),
 });
 
 export type ThemeSpec = z.infer<typeof ThemeSpecSchema>;

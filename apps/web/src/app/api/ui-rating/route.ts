@@ -6,7 +6,13 @@ const RatingSchema = z.object({
   themeId: z.string().min(1).max(64),
   score: z.number().int().min(0).max(100),
   sentiment: z.enum(["like", "dislike"]),
-  notes: z.string().max(500).optional(),
+  themeName: z.string().optional(),
+  fontFamily: z.string().optional(),
+  colors: z.record(z.string()).optional(),
+  atmosphere: z.string().optional(),
+  keywords: z.array(z.string()).optional(),
+  layoutStyle: z.string().optional(),
+  notes: z.string().max(1000).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -22,30 +28,79 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Supabase connection unavailable." }, { status: 503 });
     }
 
-    const { themeId, score, sentiment, notes } = parsed.data;
-
-    const { data, error } = await supabase.from("ui_taste_feedback").insert({
-      theme_id: themeId,
+    const {
+      themeId,
       score,
       sentiment,
-      notes: notes ?? null,
-    }).select("id, theme_id, score, sentiment, created_at").single();
+      themeName,
+      fontFamily,
+      colors,
+      atmosphere,
+      keywords,
+      layoutStyle,
+      notes,
+    } = parsed.data;
 
-    if (error) {
-      console.error("[UI Rating] Error inserting into Supabase:", error.message);
-      // Return 200 with saved: false if table does not exist yet so the UI doesn't crash before SQL is run
+    // Full structured metadata object for AI evolutionary learning
+    const richMetadata = {
+      themeName: themeName || themeId,
+      fontFamily: fontFamily || "Georgia (Serif) & System Sans",
+      colors: colors || {},
+      atmosphere: atmosphere || "sand_grain",
+      keywords: keywords || [],
+      layoutStyle: layoutStyle || "Editorial Broadsheet",
+      userNote: notes || null,
+      savedAt: new Date().toISOString(),
+    };
+
+    const notesPayload = JSON.stringify(richMetadata);
+
+    // First attempt: insert with dedicated design columns if table was expanded
+    let insertResult = await supabase
+      .from("ui_taste_feedback")
+      .insert({
+        theme_id: themeId,
+        score,
+        sentiment,
+        notes: notesPayload,
+        design_spec: richMetadata,
+        keywords: keywords || [],
+        font_family: fontFamily || "Georgia (Serif) & System Sans",
+      })
+      .select("id, theme_id, score, sentiment, created_at")
+      .single();
+
+    // Fallback if design_spec / keywords columns don't exist yet: insert into standard columns
+    if (insertResult.error && (insertResult.error.message.includes("column") || insertResult.error.code === "42703")) {
+      insertResult = await supabase
+        .from("ui_taste_feedback")
+        .insert({
+          theme_id: themeId,
+          score,
+          sentiment,
+          notes: notesPayload,
+        })
+        .select("id, theme_id, score, sentiment, created_at")
+        .single();
+    }
+
+    if (insertResult.error) {
+      console.error("[UI Rating] Error inserting into Supabase:", insertResult.error.message);
       return NextResponse.json({
         success: false,
-        warning: `Database table not found or error: ${error.message}. Please run the SQL migration in Supabase SQL Editor.`,
+        warning: `Database table not found or error: ${insertResult.error.message}`,
         score,
         themeId,
       }, { status: 200 });
     }
 
-    return NextResponse.json({ success: true, rating: data });
+    return NextResponse.json({
+      success: true,
+      rating: insertResult.data,
+      metadata: richMetadata,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

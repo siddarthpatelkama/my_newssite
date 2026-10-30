@@ -348,7 +348,18 @@ export async function writeBriefing(
   stories: Array<{ id: string; title: string; summary: string; category: string | null }>,
   options?: {
     editionDate?: string;
-    tasteRatings?: Array<{ theme_id: string; score: number; sentiment: string }>;
+    tasteRatings?: Array<{
+      themeId?: string;
+      theme_id?: string;
+      themeName?: string;
+      score: number;
+      sentiment: string;
+      keywords?: string[];
+      fontFamily?: string | null;
+      colors?: Record<string, string> | null;
+      atmosphere?: string | null;
+      layoutStyle?: string | null;
+    }>;
   },
 ) {
   const dateStr = options?.editionDate || new Date().toISOString().slice(0, 10);
@@ -399,7 +410,13 @@ Return JSON with this schema:
       "crimson": "#hex accent highlight color",
       "mute": "#hex muted secondary text color"
     },
-    "atmosphere": "none | god_rays | cyber_grid | diwali_glow | sand_grain"
+    "atmosphere": "none | god_rays | cyber_grid | diwali_glow | sand_grain",
+    "keywords": ["array", "of", "design", "style", "keywords"],
+    "typography": {
+      "headline": "font name, e.g. Georgia, serif",
+      "body": "system-ui, sans-serif"
+    },
+    "layoutStyle": "e.g. Japanese Wabi-Sabi Editorial Broadsheet or Swiss Minimalist Grid"
   }
 }
 Use only the provided story ids.`,
@@ -420,7 +437,13 @@ Use only the provided story ids.`,
         crimson: string;
         mute: string;
       };
+      typography?: {
+        headline?: string;
+        body?: string;
+      };
       atmosphere: "none" | "god_rays" | "cyber_grid" | "diwali_glow" | "sand_grain";
+      keywords: string[];
+      layoutStyle?: string;
     };
   };
 }

@@ -75,7 +75,7 @@ export default async function HomePage() {
 
         {/* Real User Taste Rating Slider at the end of the page */}
         <div className="mt-16">
-          <UiTasteRatingBar currentTheme={briefing.themeSpec?.themeName || "Kyoto Sand"} />
+          <UiTasteRatingBar themeSpec={briefing.themeSpec} />
         </div>
       </main>
     </DefaultShell>

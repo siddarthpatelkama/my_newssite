@@ -63,12 +63,34 @@ export async function generateDailyBriefing(date = new Date()) {
 
   if (hasGeminiKey()) {
     try {
-      // Query recent user taste feedback to inform adaptive UI theming
-      const { data: tasteRatings } = await supabase
+      // Query recent user taste feedback with full design metadata to inform adaptive UI theming
+      const { data: rawTasteRatings } = await supabase
         .from("ui_taste_feedback")
-        .select("theme_id, score, sentiment")
+        .select("theme_id, score, sentiment, notes")
         .order("created_at", { ascending: false })
-        .limit(10);
+        .limit(15);
+
+      const parsedTasteRatings = (rawTasteRatings || []).map((row) => {
+        let meta: Record<string, any> = {};
+        try {
+          if (row.notes && row.notes.startsWith("{")) {
+            meta = JSON.parse(row.notes);
+          }
+        } catch {
+          // ignore
+        }
+        return {
+          themeId: row.theme_id,
+          themeName: meta.themeName || row.theme_id,
+          score: row.score,
+          sentiment: row.sentiment,
+          keywords: meta.keywords || [],
+          fontFamily: meta.fontFamily || null,
+          colors: meta.colors || null,
+          atmosphere: meta.atmosphere || null,
+          layoutStyle: meta.layoutStyle || null,
+        };
+      });
 
       const generated = await withJobSpan(
         "gemini.generate_daily_briefing",
@@ -83,7 +105,7 @@ export async function generateDailyBriefing(date = new Date()) {
             })),
             {
               editionDate: edition,
-              tasteRatings: (tasteRatings as Array<{ theme_id: string; score: number; sentiment: string }>) ?? [],
+              tasteRatings: parsedTasteRatings,
             },
           ),
       );
