@@ -16,7 +16,9 @@ export async function getGmailClient() {
 
   if (error) throw error;
   if (!data?.encrypted_refresh_token) {
-    throw new Error("No Gmail credentials stored. Complete OAuth from the web app first.");
+    throw new Error(
+      "Gmail is not connected. When database rows were cleared, the stored token in 'gmail_credentials' was deleted. Please visit https://siddarthpatelkama-newssite.vercel.app/api/gmail/start to re-authorize Gmail.",
+    );
   }
 
   const oauth2 = new google.auth.OAuth2(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET);
@@ -61,7 +63,7 @@ export async function getNewsletterLabelId(): Promise<string | null> {
   const gmail = await getGmailClient();
   const res = await gmail.users.labels.list({ userId: "me" });
   const label = res.data.labels?.find(
-    (item) => item.name?.toLowerCase() === labelName.toLowerCase() || item.id?.toLowerCase() === labelName.toLowerCase()
+    (item) => item.name?.toLowerCase() === labelName.toLowerCase() || item.id?.toLowerCase() === labelName.toLowerCase(),
   );
   if (!label?.id) {
     throw new Error(`Gmail label "${labelName}" was not found. Create it and label the newsletters first, or set NEWSLETTER_LABEL=INBOX.`);
@@ -98,15 +100,18 @@ export async function getHistory(startHistoryId: string) {
         startHistoryId,
         pageToken,
       });
-      historyId = res.data.historyId ?? historyId;
-      history.push(...(res.data.history ?? []));
+      historyId = res.data.historyId ?? undefined;
+      for (const item of res.data.history ?? []) {
+        history.push(item);
+      }
       pageToken = res.data.nextPageToken ?? undefined;
     } while (pageToken);
-    return { ok: true as const, data: { historyId, history } };
+
+    return { ok: true as const, data: { history, historyId } };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("404") || message.toLowerCase().includes("not found")) {
-      return { ok: false as const, expired: true };
+    if (message.includes("404") || message.includes("historyId") || message.includes("too old")) {
+      return { ok: false as const };
     }
     throw error;
   }

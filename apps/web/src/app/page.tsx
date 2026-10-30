@@ -19,9 +19,20 @@ export default async function HomePage() {
         introduction={briefing.introduction}
       />
       {!stories.length ? (
-        <p className="mx-auto max-w-2xl border border-rule p-6 text-center leading-7 text-ink/75">
-          Your live edition will appear here after Gmail is connected and the newsletter sync and processing jobs have run.
-        </p>
+        <div className="mx-auto max-w-2xl border border-rule p-8 text-center leading-7 text-ink/75">
+          <h2 className="font-serif text-2xl text-ink">No newsletter stories yet</h2>
+          <p className="mt-2 text-sm text-mute">
+            After database rows were cleared, Gmail must be re-authorized so the background worker can sync your newsletter inbox into your daily edition.
+          </p>
+          <div className="mt-5">
+            <a
+              href="/api/gmail/start"
+              className="inline-block bg-crimson px-6 py-2.5 text-sm font-medium text-paper hover:opacity-90 transition-opacity"
+            >
+              Connect Gmail Account →
+            </a>
+          </div>
+        </div>
       ) : null}
       {lead ? <LeadStory story={lead} /> : null}
 

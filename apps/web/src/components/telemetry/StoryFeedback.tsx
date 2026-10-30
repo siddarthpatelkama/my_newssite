@@ -39,11 +39,7 @@ export function StoryFeedback({
     setIsSubmitting(true);
 
     if (eventType === "dislike") {
-      setMessage(
-        nextStoryId
-          ? `Not for you — moving down to next story…`
-          : `Not for you — moving down list…`,
-      );
+      setMessage("Moved down the list. Taking you to the next story…");
     } else {
       setMessage("Saving…");
     }
@@ -78,7 +74,7 @@ export function StoryFeedback({
 
       setMessage("Saved to your private reading metrics.");
     } catch {
-      setMessage("Could not save that response. Check the telemetry setup in Settings.");
+      setMessage("Could not save feedback. Try again later.");
     } finally {
       setIsSubmitting(false);
     }
@@ -96,6 +92,7 @@ export function StoryFeedback({
         </button>
         <button
           disabled={isSubmitting}
+          title={nextStoryTitle ? `Skip to: ${nextStoryTitle}` : "Skip to next story"}
           className={`${buttonClass} bg-paper hover:bg-rule/40 font-medium`}
           onClick={() => void submit("dislike")}
         >
