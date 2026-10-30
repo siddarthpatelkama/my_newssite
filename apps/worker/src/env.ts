@@ -13,7 +13,7 @@ const EnvSchema = z.object({
   SUPABASE_SECRET_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_API_KEYS: z.string().optional(),
-  GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   TOKEN_ENCRYPTION_KEY: z.string().optional(),

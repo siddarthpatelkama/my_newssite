@@ -9,28 +9,51 @@ import {
 } from "@signalos/shared";
 import { env } from "../env";
 
+const keyCooldowns = new Map<string, number>();
+
+export function markKeyCooldown(key: string, durationMs = 10 * 60 * 1000) {
+  keyCooldowns.set(key, Date.now() + durationMs);
+}
+
+export function isKeyInCooldown(key: string): boolean {
+  const until = keyCooldowns.get(key);
+  if (!until) return false;
+  if (Date.now() > until) {
+    keyCooldowns.delete(key);
+    return false;
+  }
+  return true;
+}
+
 export function getApiKeys(): string[] {
-  const combined = [
+  const sources: (string | undefined)[] = [
     env.GEMINI_API_KEYS,
     process.env.GEMINI_API_KEYS,
     env.GEMINI_API_KEY,
     process.env.GEMINI_API_KEY,
-  ]
-    .filter(Boolean)
-    .join(",");
+  ];
 
-  const rawTokens = combined.split(/[\r\n,]+/);
+  // Automatically discover numbered keys GEMINI_API_KEY_1 through GEMINI_API_KEY_20
+  for (let i = 1; i <= 20; i++) {
+    sources.push(process.env[`GEMINI_API_KEY_${i}`]);
+    sources.push(process.env[`GEMINI_KEY_${i}`]);
+  }
+
+  const combined = sources.filter(Boolean).join(",");
+  const rawTokens = combined.split(/[\r\n,;]+/);
   const cleaned: string[] = [];
 
   for (let token of rawTokens) {
     // Strip quotes, spaces, semicolons
     token = token.replace(/["'`;]/g, "").trim();
-    // Strip variable name prefix if user pasted "GEMINI_API_KEYS=..." into the secret
-    token = token.replace(/^GEMINI_API_KEY[S]?\s*=\s*/i, "").trim();
-    // Ignore empty tokens, comments, or dummy placeholder words like "key", "key1", "apiKey"
+    // Strip variable name prefix if user pasted "GEMINI_API_KEYS=..." or "GEMINI_API_KEY_1=..." into the secret
+    token = token.replace(/^GEMINI_API_KEY[S\d_]*\s*=\s*/i, "").trim();
+    // Ignore empty tokens, comments, or dummy placeholder words
     if (!token || token.startsWith("#")) continue;
     if (/^key\d*$/i.test(token) || token === "apiKey" || token === "your_api_key") continue;
-    cleaned.push(token);
+    if (token.length >= 15 && /^[\w\-\.]+$/.test(token)) {
+      cleaned.push(token);
+    }
   }
 
   return [...new Set(cleaned)];
@@ -51,13 +74,29 @@ export function getNextApiKey(): { key: string; index: number; total: number } {
   const keys = getApiKeys();
   if (keys.length === 0) {
     throw new Error(
-      "No valid Gemini API key found. Please check GEMINI_API_KEY or GEMINI_API_KEYS in GitHub Secrets.",
+      "No valid Gemini API key found. Please check GEMINI_API_KEY, GEMINI_API_KEYS, or GEMINI_API_KEY_1..10 in GitHub Secrets.",
     );
   }
-  const index = keyCursor % keys.length;
+
+  const total = keys.length;
+
+  // Instant rotation: find the next healthy key that is not in cooldown
+  for (let i = 0; i < total; i++) {
+    const idx = (keyCursor + i) % total;
+    const candidate = keys[idx]!;
+    if (!isKeyInCooldown(candidate)) {
+      keyCursor = (idx + 1) % total;
+      return { key: candidate, index: idx + 1, total };
+    }
+  }
+
+  // If all keys are in cooldown (e.g. at end of day), reset cooldowns and rotate anyway
+  console.warn("[Gemini] All keys are currently in cooldown; resetting cooldowns to continue cycling.");
+  keyCooldowns.clear();
+  const index = keyCursor % total;
   const key = keys[index]!;
-  keyCursor = (keyCursor + 1) % keys.length;
-  return { key, index: index + 1, total: keys.length };
+  keyCursor = (keyCursor + 1) % total;
+  return { key, index: index + 1, total };
 }
 
 const STUDENT_PROFILE = `
@@ -78,8 +117,8 @@ function getTargetModels(): string[] {
   if (configured && !configured.includes("2.0") && !configured.includes("1.5")) {
     models.push(configured);
   }
-  // Prioritize high-capacity models with 1,500 requests/day on free tier
-  models.push("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest");
+  // High-capacity models with 1,500 requests/day per key on free tier
+  models.push("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.8-flash");
   return [...new Set(models)];
 }
 
@@ -94,22 +133,13 @@ async function generateJson(prompt: string) {
   const candidateModels = getTargetModels();
   let lastError: unknown;
 
-  // Round-robin across keys in series order.
-  // If a key hits rate-limit, 400 invalid, or quota exceeded, rotate to the next key immediately.
+  // Round-robin across keys in series order with zero delay
   const totalKeys = keys.length;
   const maxAttempts = Math.max(1, totalKeys);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const { key, index, total } = getNextApiKey();
     const masked = maskKey(key);
-
-    // Filter out obviously malformed keys
-    if (!/^[\w\-\.]+$/.test(key) || key.length < 15) {
-      console.warn(
-        `[Gemini] Key #${index}/${total} (${masked}) appears to be an invalid/placeholder format. Rotating to next key...`,
-      );
-      continue;
-    }
 
     const ai = new GoogleGenAI({ apiKey: key });
 
@@ -127,15 +157,14 @@ async function generateJson(prompt: string) {
         });
         const text = response.text;
         if (!text) throw new Error("Gemini returned an empty response");
-        console.log(`[Gemini] ${model} with key #${index} succeeded (${text.length} chars)`);
+        console.log(`[Gemini] ${model} with key #${index}/${total} succeeded (${text.length} chars)`);
         return JSON.parse(text) as unknown;
       } catch (error) {
         lastError = error;
         const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[Gemini] Key #${index} (${masked}) failed on ${model}: ${message}`);
+        console.warn(`[Gemini] Key #${index}/${total} (${masked}) failed on ${model}: ${message.slice(0, 140)}`);
 
-        // If key itself is invalid (400) or unauthenticated (401/403),
-        // don't waste time trying more models on this key; jump immediately to the next key
+        // If key is invalid or unauthorized, permanently disable this key for this run
         if (
           message.includes("API_KEY_INVALID") ||
           message.includes("API key not valid") ||
@@ -143,18 +172,16 @@ async function generateJson(prompt: string) {
           message.includes("401") ||
           message.includes("403")
         ) {
-          console.warn(
-            `[Gemini] Key #${index} (${masked}) authentication failed (${message.slice(0, 80)}). Rotating to next API key immediately...`,
-          );
-          break; // Break model loop, advance to next key in outer loop
+          console.warn(`[Gemini] Key #${index} (${masked}) authentication failed. Skipping key immediately...`);
+          markKeyCooldown(key, 24 * 60 * 60 * 1000);
+          break; // break model loop, jump to next key instantly
         }
 
-        // For 429 / quota errors or 503 unavailable, log and continue to try
-        // other models (e.g. gemini-2.5-flash has separate quota from gemini-3.8-flash)
+        // If 429 quota reached on this model, mark key on 10m cooldown and jump to next key immediately
         if (message.includes("429") || message.includes("RESOURCE_EXHAUSTED") || message.includes("quota")) {
-          console.warn(
-            `[Gemini] ${model} quota reached on key #${index} (${masked}). Attempting fallback model...`,
-          );
+          console.warn(`[Gemini] Key #${index} (${masked}) hit quota on ${model}. Cooling down and rotating immediately...`);
+          markKeyCooldown(key, 10 * 60 * 1000);
+          break; // break model loop, jump to next key instantly
         }
       }
     }
