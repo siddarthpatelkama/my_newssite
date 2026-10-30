@@ -172,5 +172,16 @@ export async function generateDailyBriefing(date = new Date()) {
     }
   }
 
+  // Storage optimization: prune heavy raw HTML from processed/ignored emails to conserve Supabase free tier
+  try {
+    await supabase
+      .from("emails")
+      .update({ body_html: null })
+      .in("processing_status", ["processed", "ignored"])
+      .not("body_html", "is", null);
+  } catch (pruneErr) {
+    console.warn("[Storage Pruner] Warning pruning legacy body_html:", pruneErr);
+  }
+
   return { skipped: false, briefingId: briefing?.id, edition };
 }

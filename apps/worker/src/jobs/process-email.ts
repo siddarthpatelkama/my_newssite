@@ -101,6 +101,8 @@ async function processOneEmail(email: {
           processing_status: "ignored",
           processing_started_at: null,
           error_message: `Waste of time: ${wasteCheck.reason}`,
+          body_html: null,
+          body_text: null,
         })
         .eq("id", email.id);
       if (error) throw error;
@@ -130,6 +132,8 @@ async function processOneEmail(email: {
             processing_status: "ignored",
             processing_started_at: null,
             error_message: `Waste of time: ${extracted.reason.slice(0, 500)}`,
+            body_html: null,
+            body_text: null,
           })
           .eq("id", email.id);
         if (error) throw error;
@@ -270,6 +274,7 @@ async function processOneEmail(email: {
       processing_status: "processed",
       processing_started_at: null,
       next_retry_at: null,
+      body_html: null, // Purge heavy HTML markup to conserve Supabase free-tier storage
     }).eq("id", email.id);
     if (processedError) throw processedError;
   } catch (error) {
