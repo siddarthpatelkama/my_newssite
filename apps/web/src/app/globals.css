@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
 }
 
 html {
@@ -11,11 +11,55 @@ html {
 }
 
 body {
-  background: #f4efe4;
-  color: #1c1712;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
 }
 
 .hairline {
   background: linear-gradient(to right, transparent, #1c1712, transparent);
   height: 1px;
+}
+
+/* God Rays Volumetric Shimmer Animation */
+@keyframes godRayShimmer {
+  0% {
+    opacity: 0.82;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1.05);
+  }
+  100% {
+    opacity: 0.88;
+    transform: scaleY(0.98);
+  }
+}
+
+@keyframes godRayRotate {
+  0% {
+    transform: rotate(-1deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+  100% {
+    transform: rotate(-1deg);
+  }
+}
+
+.animate-god-rays {
+  animation: godRayShimmer 9s ease-in-out infinite alternate;
+}
+
+.animate-god-rays-slow {
+  animation: godRayRotate 16s ease-in-out infinite alternate;
+  transform-origin: 50% 0%;
+}
+
+/* Terminal CRT Scanlines */
+.crt-grid {
+  background-size: 100% 4px;
+  background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%);
 }

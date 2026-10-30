@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const links = [
   { href: "/", label: "Edition" },
+  { href: "/ui/god-rays", label: "7 UI Styles ✨" },
   { href: "/feed", label: "Feed" },
   { href: "/search", label: "Search" },
   { href: "/saved", label: "Saved" },
