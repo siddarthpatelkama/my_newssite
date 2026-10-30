@@ -2,25 +2,28 @@ import type { ThemeSpec } from "@signalos/shared";
 import { SiteHeader } from "./SiteHeader";
 import { SiteFooter } from "./SiteFooter";
 import { PageTelemetry } from "@/components/telemetry/PageTelemetry";
+import { getActiveThemeSpec } from "@/lib/queries";
 
-export function DefaultShell({
+export async function DefaultShell({
   children,
   themeSpec,
 }: {
   children: React.ReactNode;
   themeSpec?: ThemeSpec | null;
 }) {
-  const customStyles = themeSpec
+  const activeSpec = themeSpec !== undefined ? themeSpec : (await getActiveThemeSpec());
+
+  const customStyles = activeSpec
     ? ({
-        "--theme-paper": themeSpec.colors.paper,
-        "--theme-ink": themeSpec.colors.ink,
-        "--theme-rule": themeSpec.colors.rule,
-        "--theme-accent": themeSpec.colors.crimson,
-        "--theme-mute": themeSpec.colors.mute,
+        "--theme-paper": activeSpec.colors.paper,
+        "--theme-ink": activeSpec.colors.ink,
+        "--theme-rule": activeSpec.colors.rule,
+        "--theme-accent": activeSpec.colors.crimson,
+        "--theme-mute": activeSpec.colors.mute,
       } as React.CSSProperties)
     : undefined;
 
-  const atmosphere = themeSpec?.atmosphere ?? "sand_grain";
+  const atmosphere = activeSpec?.atmosphere ?? "sand_grain";
 
   return (
     <div
@@ -50,12 +53,12 @@ export function DefaultShell({
       ) : null}
 
       {/* Dynamic Daily Theme Badge */}
-      {themeSpec?.headlineBadge ? (
+      {activeSpec?.headlineBadge ? (
         <div className="relative z-10 w-full border-b border-rule/30 bg-paper/60 backdrop-blur py-1.5 text-center text-[11px] font-mono tracking-wider text-mute uppercase">
-          {themeSpec.headlineBadge}
-          {themeSpec.reasoning ? (
+          {activeSpec.headlineBadge}
+          {activeSpec.reasoning ? (
             <span className="hidden md:inline text-mute/70 font-sans normal-case ml-2">
-              — {themeSpec.reasoning}
+              — {activeSpec.reasoning}
             </span>
           ) : null}
         </div>

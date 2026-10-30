@@ -181,3 +181,9 @@ export async function getBriefing(stories: StoryRecord[]) {
     themeSpec: config?.themeSpec ?? null,
   };
 }
+
+export async function getActiveThemeSpec(): Promise<ThemeSpec | null> {
+  const briefing = await getBriefing([]);
+  return briefing.themeSpec ?? null;
+}
+

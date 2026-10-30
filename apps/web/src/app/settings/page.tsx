@@ -1,15 +1,20 @@
 import { DefaultShell } from "@/components/layout/DefaultShell";
 import { getTelemetrySummary } from "@/lib/telemetry/summary";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { EvolveThemeButton } from "@/components/theme/EvolveThemeButton";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ gmail?: string }> }) {
   const { gmail } = await searchParams;
   const telemetry = await getTelemetrySummary();
   const supabase = createAdminSupabase();
-  const { data: creds } = supabase
-    ? await supabase.from("gmail_credentials").select("account_email, updated_at").eq("id", "default").maybeSingle()
-    : { data: null };
 
+  const [credsRes, tasteRes] = await Promise.all([
+    supabase ? supabase.from("gmail_credentials").select("account_email, updated_at").eq("id", "default").maybeSingle() : Promise.resolve({ data: null }),
+    supabase ? supabase.from("ui_taste_feedback").select("theme_id, score, sentiment, notes, created_at").order("created_at", { ascending: false }).limit(6) : Promise.resolve({ data: [] }),
+  ]);
+
+  const creds = credsRes.data;
+  const tasteRatings = tasteRes.data ?? [];
   const isConnected = Boolean(creds?.account_email);
 
   return (
@@ -54,6 +59,68 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             >
               {isConnected ? "Reconnect Gmail Mailbox →" : "Connect Gmail Account →"}
             </a>
+          </div>
+        </section>
+
+        {/* AI Generative Design & Taste Profile Section */}
+        <section className="mt-12 border border-rule p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-rule/60 pb-5">
+            <div>
+              <h2 className="font-serif text-2xl text-ink">AI Design Evolution</h2>
+              <p className="mt-1 text-xs text-mute max-w-sm">
+                Each rating shapes Gemini&apos;s palettes, fonts, and atmosphere for future daily editions.
+              </p>
+            </div>
+            <EvolveThemeButton />
+          </div>
+
+          <div className="mt-6">
+            <h3 className="font-serif text-xs font-semibold uppercase tracking-wider text-mute mb-3">
+              Recorded Design Taste Feedback
+            </h3>
+            {!tasteRatings.length ? (
+              <p className="text-xs text-mute py-3">
+                No ratings logged yet. Scroll to the bottom of the home edition to rate today&apos;s aesthetic!
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {tasteRatings.map((rating) => {
+                  let meta: Record<string, unknown> = {};
+                  try {
+                    if (rating.notes && rating.notes.startsWith("{")) meta = JSON.parse(rating.notes) as Record<string, unknown>;
+                  } catch {}
+                  const themeDisplayName = typeof meta.themeName === "string" ? meta.themeName : rating.theme_id;
+                  const keywordsList = Array.isArray(meta.keywords) ? (meta.keywords as string[]) : [];
+                  return (
+                    <div
+                      key={rating.created_at}
+                      className="flex items-center justify-between border-b border-rule/40 pb-2.5 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-serif font-bold text-ink">{themeDisplayName}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${
+                            rating.sentiment === "like"
+                              ? "bg-emerald-500/10 text-emerald-800"
+                              : "bg-rose-500/10 text-rose-800"
+                          }`}
+                        >
+                          {rating.sentiment.toUpperCase()}
+                        </span>
+                        <div className="hidden sm:flex items-center gap-1">
+                          {keywordsList.slice(0, 3).map((kw: string) => (
+                            <span key={kw} className="text-[10px] text-mute font-mono">
+                              #{kw}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <span className="font-serif font-bold text-ink">{rating.score}/100</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
 
