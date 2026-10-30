@@ -2,12 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SourceList } from "@/components/editorial/SourceList";
 import { StoryFeedback } from "@/components/telemetry/StoryFeedback";
-import { getStory } from "@/lib/queries";
+import { getStories, getStory } from "@/lib/queries";
 
 export default async function StoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const story = await getStory(id);
+  const stories = await getStories();
+  const story = stories.find((s) => s.id === id) ?? (await getStory(id));
   if (!story) notFound();
+
+  const currentIndex = stories.findIndex((s) => s.id === id);
+  const nextStory = currentIndex >= 0 && currentIndex < stories.length - 1 ? stories[currentIndex + 1] : null;
+  const prevStory = currentIndex > 0 ? stories[currentIndex - 1] : null;
 
   return (
     <article className="mx-auto max-w-3xl">
@@ -28,10 +33,31 @@ export default async function StoryPage({ params }: { params: Promise<{ id: stri
       <div className="mt-10">
         <SourceList sources={story.sources} />
       </div>
-      <StoryFeedback storyId={story.id} />
-      <Link href="/" className="mt-10 inline-block text-xs uppercase tracking-[0.2em] text-mute">
-        ← Back to the edition
-      </Link>
+      <StoryFeedback
+        storyId={story.id}
+        nextStoryId={nextStory?.id ?? null}
+        nextStoryTitle={nextStory?.canonicalTitle ?? null}
+      />
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-rule pt-6 text-xs uppercase tracking-[0.2em] text-mute">
+        {prevStory ? (
+          <Link href={`/stories/${prevStory.id}`} className="hover:text-crimson">
+            ← Previous: {prevStory.canonicalTitle.slice(0, 24)}…
+          </Link>
+        ) : (
+          <Link href="/" className="hover:text-crimson">
+            ← Back to edition
+          </Link>
+        )}
+        {nextStory ? (
+          <Link href={`/stories/${nextStory.id}`} className="hover:text-crimson font-medium text-ink">
+            Next: {nextStory.canonicalTitle.slice(0, 24)}… →
+          </Link>
+        ) : (
+          <Link href="/" className="hover:text-crimson">
+            Back to edition →
+          </Link>
+        )}
+      </div>
     </article>
   );
 }

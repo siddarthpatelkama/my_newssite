@@ -70,22 +70,34 @@ export async function getStories(): Promise<StoryRecord[]> {
   const supabase = createAdminSupabase();
   if (!supabase) return [];
 
-  const { data: stories, error } = await supabase
-    .from("stories")
-    .select(
-      "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, story_sources(article_id, articles(id, title, canonical_url, source_name))",
-    )
-    .order("last_updated_at", { ascending: false })
-    .limit(40);
+  const [storiesRes, dislikesRes] = await Promise.all([
+    supabase
+      .from("stories")
+      .select(
+        "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, story_sources(article_id, articles(id, title, canonical_url, source_name))",
+      )
+      .order("last_updated_at", { ascending: false })
+      .limit(40),
+    supabase
+      .from("reader_events")
+      .select("story_id")
+      .eq("event_type", "dislike")
+      .not("story_id", "is", null)
+      .limit(100),
+  ]);
 
-  if (error) {
-    console.error("Unable to load stories from Supabase:", error.message);
+  if (storiesRes.error) {
+    console.error("Unable to load stories from Supabase:", storiesRes.error.message);
     return [];
   }
 
-  if (!stories?.length) return [];
+  if (!storiesRes.data?.length) return [];
 
-  return (stories as unknown as StoryRow[]).map((story) => ({
+  const dislikedSet = new Set(
+    (dislikesRes.data ?? []).map((d: { story_id: string | null }) => d.story_id).filter(Boolean),
+  );
+
+  const mapped = (storiesRes.data as unknown as StoryRow[]).map((story) => ({
     id: story.id,
     canonicalTitle: story.canonical_title,
     summary: story.summary,
@@ -103,6 +115,17 @@ export async function getStories(): Promise<StoryRecord[]> {
         return Array.isArray(row.articles) ? row.articles.map(mapArticle) : [mapArticle(row.articles)];
       }) ?? [],
   }));
+
+  // Disliked ("Not for me") stories are automatically demoted down to the bottom of the list
+  if (dislikedSet.size > 0) {
+    mapped.sort((a, b) => {
+      const aDisliked = dislikedSet.has(a.id) ? 1 : 0;
+      const bDisliked = dislikedSet.has(b.id) ? 1 : 0;
+      return aDisliked - bDisliked;
+    });
+  }
+
+  return mapped;
 }
 
 export async function getStory(id: string) {
