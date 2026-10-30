@@ -3,12 +3,15 @@ import { processPendingEmails } from "./jobs/process-email";
 import { syncGmail } from "./jobs/sync-gmail";
 import { withJobSpan } from "./telemetry";
 import { getApiKeys } from "./ai/gemini";
+import { env } from "./env";
 
 const command = process.argv[2] ?? "help";
 
 async function main() {
   const keys = getApiKeys();
   console.log(`[Worker] Initialized with command: '${command}'`);
+  console.log(`[Worker] Supabase URL configured: ${Boolean(env.supabaseUrl)}`);
+  console.log(`[Worker] Supabase Service Key configured: ${Boolean(env.SUPABASE_SERVICE_ROLE_KEY)}`);
   console.log(`[Worker] Gemini API keys detected: ${keys.length}`);
 
   switch (command) {
@@ -39,25 +42,41 @@ async function main() {
       break;
     }
     case "run": {
+      let sync = { scanned: 0, inserted: 0 };
+      let process = { processed: 0 };
+      let briefing: any = { skipped: true };
+
       console.log("\n================ [STEP 1/3: GMAIL SYNC] ================");
-      const sync = await withJobSpan("worker.gmail_sync", { "job.type": "gmail.sync" }, syncGmail);
-      console.log(`[Worker] Gmail sync completed: ${sync.scanned} scanned, ${sync.inserted} inserted.`);
+      try {
+        sync = await withJobSpan("worker.gmail_sync", { "job.type": "gmail.sync" }, syncGmail);
+        console.log(`[Worker] Gmail sync completed: ${sync.scanned} scanned, ${sync.inserted} inserted.`);
+      } catch (err: any) {
+        console.error("[Worker] Warning during Gmail sync:", err?.message || err);
+      }
 
       console.log("\n================ [STEP 2/3: PROCESS EMAILS] ============");
-      const process = await withJobSpan(
-        "worker.process_emails",
-        { "job.type": "email.process" },
-        processPendingEmails,
-      );
-      console.log(`[Worker] Email processing completed: ${process.processed} processed.`);
+      try {
+        process = await withJobSpan(
+          "worker.process_emails",
+          { "job.type": "email.process" },
+          processPendingEmails,
+        );
+        console.log(`[Worker] Email processing completed: ${process.processed} processed.`);
+      } catch (err: any) {
+        console.error("[Worker] Warning during email processing:", err?.message || err);
+      }
 
       console.log("\n================ [STEP 3/3: GENERATE BRIEFING] =========");
-      const briefing = await withJobSpan(
-        "worker.generate_briefing",
-        { "job.type": "briefing.generate" },
-        generateDailyBriefing,
-      );
-      console.log(`[Worker] Briefing generation completed:`, briefing);
+      try {
+        briefing = await withJobSpan(
+          "worker.generate_briefing",
+          { "job.type": "briefing.generate" },
+          generateDailyBriefing,
+        );
+        console.log(`[Worker] Briefing generation completed:`, briefing);
+      } catch (err: any) {
+        console.error("[Worker] Warning during briefing generation:", err?.message || err);
+      }
 
       console.log("\n================ [PIPELINE FINISHED] ===================");
       console.log(JSON.stringify({ command, sync, process, briefing }));
@@ -70,10 +89,10 @@ async function main() {
 
 main()
   .then(() => {
-    console.log("[Worker] Exiting with success.");
+    console.log("\n[Worker] Pipeline finished with code 0.");
     process.exit(0);
   })
   .catch((error) => {
-    console.error("\n[Worker] FATAL PIPELINE ERROR:", error);
+    console.error("\n[Worker] Unhandled top-level exception:", error);
     process.exit(1);
   });

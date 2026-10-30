@@ -212,7 +212,7 @@ Return valid JSON with this schema:
     articles: Array.isArray(obj.articles)
       ? obj.articles.map((a: any) => {
           const rawUrl = typeof a?.canonicalUrl === "string" ? a.canonicalUrl.trim() : "";
-          const isValidUrl = rawUrl.startsWith("http://") || rawUrl.startsWith("https://");
+          const isValidUrl = /^https?:\/\/[^\s$.?#].[^\s]*$/i.test(rawUrl);
           return {
             title: String(a?.title || input.subject || "Untitled Article"),
             canonicalUrl: isValidUrl ? rawUrl : undefined,

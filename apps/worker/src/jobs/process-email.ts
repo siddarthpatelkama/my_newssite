@@ -38,8 +38,12 @@ export async function processPendingEmails(limit = env.MAX_EMAILS_PER_SYNC || 50
 
   let processed = 0;
   for (const email of emails ?? []) {
-    await processOneEmail(email);
-    processed += 1;
+    try {
+      await processOneEmail(email);
+      processed += 1;
+    } catch (err) {
+      console.error(`[Worker] Error processing email "${email.subject}":`, err);
+    }
   }
   return { processed };
 }

@@ -122,7 +122,7 @@ export async function generateDailyBriefing(date = new Date()) {
 
   if (briefingError) {
     console.error("[generateDailyBriefing] Error upserting daily_briefings:", briefingError);
-    throw briefingError;
+    return { skipped: true, reason: briefingError.message };
   }
 
   if (briefing?.id) {
