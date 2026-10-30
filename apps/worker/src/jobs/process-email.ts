@@ -18,11 +18,12 @@ async function withRetries<T>(fn: () => Promise<T>) {
 }
 
 export async function processPendingEmails(limit = env.MAX_EMAILS_PER_SYNC || 50) {
-  // Re-queue any previously failed or ignored emails so they are processed with the active Gemini model
+  // Re-queue failed emails for retry.
+  // Emails marked 'ignored' (waste of time) stay excluded from the site.
   await supabase
     .from("emails")
     .update({ processing_status: "pending", next_retry_at: null, processing_attempts: 0 })
-    .in("processing_status", ["failed", "ignored"]);
+    .in("processing_status", ["failed"]);
 
   const { data: claimed, error } = await supabase.rpc("claim_pending_emails", { p_limit: limit });
   if (error) throw error;
@@ -68,14 +69,22 @@ async function processOneEmail(email: {
           }),
         ),
       );
+
+      // If Gemini identifies this email as a waste of time, do not show it on the site!
       if (!extracted.keep) {
-        const { error } = await supabase.from("emails").update({
-          processing_status: "ignored",
-          processing_started_at: null,
-        }).eq("id", email.id);
+        console.log(`[Curator] Filtered out waste of time: "${email.subject}". Reason: ${extracted.reason}`);
+        const { error } = await supabase
+          .from("emails")
+          .update({
+            processing_status: "ignored",
+            processing_started_at: null,
+            error_message: `Waste of time: ${extracted.reason.slice(0, 500)}`,
+          })
+          .eq("id", email.id);
         if (error) throw error;
         return;
       }
+
       if (extracted.articles.length > 0) {
         articles = extracted.articles.map((article) => ({
           title: article.title,
