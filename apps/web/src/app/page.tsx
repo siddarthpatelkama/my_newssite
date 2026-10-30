@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { DiwaliTheme } from "@/components/themes/DiwaliTheme";
+import { CyberAttackTheme } from "@/components/themes/CyberAttackTheme";
 import { KyotoSandTheme } from "@/components/themes/KyotoSandTheme";
 import { NordicSlateTheme } from "@/components/themes/NordicSlateTheme";
 import { BroadsheetTheme } from "@/components/themes/BroadsheetTheme";
@@ -26,6 +27,8 @@ export default async function HomePage({
   switch (theme) {
     case "diwali":
       return <DiwaliTheme stories={stories} briefing={briefing} />;
+    case "cyber-attack":
+      return <CyberAttackTheme stories={stories} briefing={briefing} />;
     case "kyoto-sand":
       return <KyotoSandTheme stories={stories} briefing={briefing} />;
     case "nordic-slate":

@@ -9,3 +9,4 @@ export default async function DiwaliPage() {
 
   return <DiwaliTheme stories={stories} briefing={briefing} />;
 }
+

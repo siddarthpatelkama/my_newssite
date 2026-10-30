@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 export type ThemeId =
   | "diwali"
+  | "cyber-attack"
   | "kyoto-sand"
   | "nordic-slate"
   | "broadsheet"
@@ -25,10 +26,18 @@ export const THEMES: Array<{
   {
     id: "diwali",
     name: "🪔 Diwali",
-    tagline: "Festival of Lights: floating earthen diyas, royal purple night sky & golden embers",
+    tagline: "Festival of Lights: floating earthen diyas, sacred mandala & golden sky lanterns",
     path: "/ui/diwali",
     dotColor: "#f59e0b",
     accentColor: "from-amber-400 to-yellow-200",
+  },
+  {
+    id: "cyber-attack",
+    name: "⚡ Cyber Defense",
+    tagline: "Live AI defense grid with intercept lasers firing at cyber threats in the background",
+    path: "/ui/cyber-attack",
+    dotColor: "#ef4444",
+    accentColor: "from-rose-500 to-cyan-400",
   },
   {
     id: "kyoto-sand",
