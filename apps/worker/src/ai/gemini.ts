@@ -18,11 +18,22 @@ export function getApiKeys(): string[] {
   ]
     .filter(Boolean)
     .join(",");
-  const keys = combined
-    .split(/[\r\n,]+/)
-    .map((k) => k.trim())
-    .filter((k) => k.length > 0);
-  return [...new Set(keys)];
+
+  const rawTokens = combined.split(/[\r\n,]+/);
+  const cleaned: string[] = [];
+
+  for (let token of rawTokens) {
+    // Strip quotes, spaces, semicolons
+    token = token.replace(/["'`;]/g, "").trim();
+    // Strip variable name prefix if user pasted "GEMINI_API_KEYS=..." into the secret
+    token = token.replace(/^GEMINI_API_KEY[S]?\s*=\s*/i, "").trim();
+    // Ignore empty tokens, comments, or dummy placeholder words like "key", "key1", "apiKey"
+    if (!token || token.startsWith("#")) continue;
+    if (/^key\d*$/i.test(token) || token === "apiKey" || token === "your_api_key") continue;
+    cleaned.push(token);
+  }
+
+  return [...new Set(cleaned)];
 }
 
 export function hasGeminiKey(): boolean {
@@ -39,7 +50,9 @@ function maskKey(key: string): string {
 export function getNextApiKey(): { key: string; index: number; total: number } {
   const keys = getApiKeys();
   if (keys.length === 0) {
-    throw new Error("GEMINI_API_KEY or GEMINI_API_KEYS is required for intelligence processing");
+    throw new Error(
+      "No valid Gemini API key found. Please check GEMINI_API_KEY or GEMINI_API_KEYS in GitHub Secrets.",
+    );
   }
   const index = keyCursor % keys.length;
   const key = keys[index]!;
@@ -65,20 +78,31 @@ function getTargetModels(): string[] {
 async function generateJson(prompt: string) {
   const keys = getApiKeys();
   if (keys.length === 0) {
-    throw new Error("GEMINI_API_KEY or GEMINI_API_KEYS is required for intelligence processing");
+    throw new Error(
+      "No valid Gemini API key found. Please check GEMINI_API_KEY or GEMINI_API_KEYS in GitHub Secrets.",
+    );
   }
 
   const candidateModels = getTargetModels();
   let lastError: unknown;
 
   // Round-robin across keys in series order.
-  // If a key hits rate-limit or quota exceeded (429 / RESOURCE_EXHAUSTED), rotate to the next key immediately.
+  // If a key hits rate-limit, 400 invalid, or quota exceeded, rotate to the next key immediately.
   const totalKeys = keys.length;
-  const attempts = Math.max(1, totalKeys);
+  const maxAttempts = Math.max(1, totalKeys);
 
-  for (let attempt = 0; attempt < attempts; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const { key, index, total } = getNextApiKey();
     const masked = maskKey(key);
+
+    // Filter out obviously malformed keys
+    if (!/^[\w\-\.]+$/.test(key) || key.length < 15) {
+      console.warn(
+        `[Gemini] Key #${index}/${total} (${masked}) appears to be an invalid/placeholder format. Rotating to next key...`,
+      );
+      continue;
+    }
+
     const ai = new GoogleGenAI({ apiKey: key });
 
     for (const model of candidateModels) {
@@ -102,14 +126,23 @@ async function generateJson(prompt: string) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[Gemini] Key #${index} (${masked}) failed on ${model}: ${message}`);
 
+        // If key is invalid (400), unauthenticated (401/403), or quota reached (429),
+        // don't waste time on this key; jump immediately to the next key in the pool
         if (
+          message.includes("API_KEY_INVALID") ||
+          message.includes("API key not valid") ||
+          message.includes("400") ||
+          message.includes("401") ||
+          message.includes("403") ||
           message.includes("429") ||
           message.includes("RESOURCE_EXHAUSTED") ||
           message.includes("quota") ||
           message.includes("rate limit")
         ) {
-          console.warn(`[Gemini] Quota/rate-limit hit on key #${index}. Rotating to next API key immediately...`);
-          break; // Break model loop, advance to next key in key loop
+          console.warn(
+            `[Gemini] Key #${index} (${masked}) unusable (${message.slice(0, 80)}). Rotating to next API key immediately...`,
+          );
+          break; // Break model loop, advance to next key in outer loop
         }
       }
     }

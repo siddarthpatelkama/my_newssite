@@ -40,7 +40,10 @@ export async function generateDailyBriefing(date = new Date()) {
     .order("novelty_score", { ascending: false })
     .limit(12);
 
-  if (error) throw error;
+  if (error) {
+    console.warn("[generateDailyBriefing] Error querying recent stories:", error.message);
+  }
+
   if (!stories?.length) {
     const { data: fallbackStories } = await supabase
       .from("stories")
@@ -115,14 +118,25 @@ export async function generateDailyBriefing(date = new Date()) {
       { onConflict: "edition_date" },
     )
     .select("id")
-    .single();
+    .maybeSingle();
 
-  if (briefingError) throw briefingError;
+  if (briefingError) {
+    console.error("[generateDailyBriefing] Error upserting daily_briefings:", briefingError);
+    throw briefingError;
+  }
 
-  await supabase.from("dashboard_configs").upsert({
-    briefing_id: briefing.id,
-    config,
-  });
+  if (briefing?.id) {
+    const { error: configError } = await supabase.from("dashboard_configs").upsert(
+      {
+        briefing_id: briefing.id,
+        config,
+      },
+      { onConflict: "briefing_id" },
+    );
+    if (configError) {
+      console.warn("[generateDailyBriefing] Warning upserting dashboard_configs:", configError.message);
+    }
+  }
 
-  return { skipped: false, briefingId: briefing.id, edition };
+  return { skipped: false, briefingId: briefing?.id, edition };
 }
