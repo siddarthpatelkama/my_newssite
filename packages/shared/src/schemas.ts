@@ -40,10 +40,35 @@ export const DashboardSectionSchema = z.object({
   storyIds: z.array(z.string().uuid()),
 });
 
+export const ThemeSpecSchema = z.object({
+  themeName: z.string(),
+  headlineBadge: z.string().optional(),
+  reasoning: z.string().optional(),
+  colors: z.object({
+    paper: z.string(),
+    ink: z.string(),
+    rule: z.string(),
+    crimson: z.string(),
+    mute: z.string(),
+  }),
+  typography: z
+    .object({
+      headline: z.string().optional(),
+      body: z.string().optional(),
+    })
+    .optional(),
+  atmosphere: z.enum(["none", "god_rays", "cyber_grid", "diwali_glow", "sand_grain"]).default("none"),
+  keywords: z.array(z.string()).default([]),
+  layoutStyle: z.string().optional(),
+});
+
+export type ThemeSpec = z.infer<typeof ThemeSpecSchema>;
+
 export const DashboardConfigSchema = z.object({
   edition: z.string(),
   layout: z.enum(LAYOUT_VARIANTS),
   sections: z.array(DashboardSectionSchema).min(1),
+  themeSpec: ThemeSpecSchema.optional(),
 });
 
 export type DashboardConfig = z.infer<typeof DashboardConfigSchema>;

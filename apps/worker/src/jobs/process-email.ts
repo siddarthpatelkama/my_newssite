@@ -17,12 +17,43 @@ async function withRetries<T>(fn: () => Promise<T>) {
   throw lastError;
 }
 
+export function isObviousTimeWaster(subject: string, content: string): { isWaste: boolean; reason: string } {
+  const combined = `${subject} ${content.slice(0, 3000)}`.toLowerCase();
+
+  // 1. Verification codes, OTPs, security alerts, login confirmations, password resets
+  if (
+    /\b(security code|verification code|one-time code|one-time password|otp|confirm your email|confirm the following action|security alert|password reset|login alert|verify your account|use this code|reveal environment variable|authorization code|confirm login)\b/i.test(
+      combined,
+    )
+  ) {
+    return {
+      isWaste: true,
+      reason: "Automated verification / security alert / OTP notification with zero educational or tech value.",
+    };
+  }
+
+  // 2. Transactional receipts, billing, invoice notices
+  if (
+    /\b(payment receipt|invoice paid|subscription renewed|order confirmation|payment succeeded|billing statement|payment confirmation)\b/i.test(
+      combined,
+    )
+  ) {
+    return {
+      isWaste: true,
+      reason: "Transactional receipt or billing notification.",
+    };
+  }
+
+  return { isWaste: false, reason: "" };
+}
+
 export async function processPendingEmails(limit = env.MAX_EMAILS_PER_SYNC || 50) {
-  // Re-queue any previously failed or ignored emails so they are processed with the active Gemini model
+  // Re-queue failed emails for retry.
+  // Emails marked 'ignored' (waste of time) stay excluded from the site.
   await supabase
     .from("emails")
     .update({ processing_status: "pending", next_retry_at: null, processing_attempts: 0 })
-    .in("processing_status", ["failed", "ignored"]);
+    .in("processing_status", ["failed"]);
 
   const { data: claimed, error } = await supabase.rpc("claim_pending_emails", { p_limit: limit });
   if (error) throw error;
@@ -37,8 +68,12 @@ export async function processPendingEmails(limit = env.MAX_EMAILS_PER_SYNC || 50
 
   let processed = 0;
   for (const email of emails ?? []) {
-    await processOneEmail(email);
-    processed += 1;
+    try {
+      await processOneEmail(email);
+      processed += 1;
+    } catch (err) {
+      console.error(`[Worker] Error processing email "${email.subject}":`, err);
+    }
   }
   return { processed };
 }
@@ -54,11 +89,30 @@ async function processOneEmail(email: {
 }) {
   try {
     const sender = Array.isArray(email.newsletters) ? email.newsletters[0] : email.newsletters;
+    const emailContent = (email.body_text || email.body_html || "").slice(0, 12000);
+
+    // Filter out obvious transactional / security / OTP emails deterministically
+    const wasteCheck = isObviousTimeWaster(email.subject ?? "", emailContent);
+    if (wasteCheck.isWaste) {
+      console.log(`[Curator] Deterministically filtered out time-waster: "${email.subject}". Reason: ${wasteCheck.reason}`);
+      const { error } = await supabase
+        .from("emails")
+        .update({
+          processing_status: "ignored",
+          processing_started_at: null,
+          error_message: `Waste of time: ${wasteCheck.reason}`,
+          body_html: null,
+          body_text: null,
+        })
+        .eq("id", email.id);
+      if (error) throw error;
+      return;
+    }
+
     const heuristic = extractArticlesFromHtml(email.body_html ?? "", email.body_text ?? "");
     let articles = heuristic;
 
     if (hasGeminiKey()) {
-      const emailContent = (email.body_text || email.body_html || "").slice(0, 12000);
       const extracted = await withRetries(() =>
         withJobSpan("gemini.extract_newsletter", { "gen_ai.operation.name": "extract_newsletter" }, () =>
           extractEmailArticles({
@@ -68,14 +122,24 @@ async function processOneEmail(email: {
           }),
         ),
       );
+
+      // If Gemini identifies this email as a waste of time, do not show it on the site!
       if (!extracted.keep) {
-        const { error } = await supabase.from("emails").update({
-          processing_status: "ignored",
-          processing_started_at: null,
-        }).eq("id", email.id);
+        console.log(`[Curator] Filtered out waste of time: "${email.subject}". Reason: ${extracted.reason}`);
+        const { error } = await supabase
+          .from("emails")
+          .update({
+            processing_status: "ignored",
+            processing_started_at: null,
+            error_message: `Waste of time: ${extracted.reason.slice(0, 500)}`,
+            body_html: null,
+            body_text: null,
+          })
+          .eq("id", email.id);
         if (error) throw error;
         return;
       }
+
       if (extracted.articles.length > 0) {
         articles = extracted.articles.map((article) => ({
           title: article.title,
@@ -210,6 +274,7 @@ async function processOneEmail(email: {
       processing_status: "processed",
       processing_started_at: null,
       next_retry_at: null,
+      body_html: null, // Purge heavy HTML markup to conserve Supabase free-tier storage
     }).eq("id", email.id);
     if (processedError) throw processedError;
   } catch (error) {

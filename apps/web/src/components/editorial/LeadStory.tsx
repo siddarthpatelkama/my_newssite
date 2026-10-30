@@ -14,7 +14,9 @@ export function LeadStory({ story }: { story: StoryRecord }) {
         <p className="mt-6 max-w-2xl font-serif text-xl leading-8 text-ink/80">{story.summary}</p>
       </div>
       <div className="border-l-0 border-rule lg:border-l lg:pl-8">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Why it matters</p>
+        <p className="text-[11px] uppercase tracking-[0.24em] font-medium text-crimson">
+          Why you should read this
+        </p>
         <p className="mt-3 text-[16px] leading-7">{story.whyItMatters}</p>
         <ul className="mt-6 space-y-2 text-sm leading-6">
           {story.keyPoints.slice(0, 3).map((point) => (

@@ -5,11 +5,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        paper: "#f4efe4",
-        ink: "#1c1712",
-        rule: "#d7cbb8",
-        crimson: "#8f1d1d",
-        mute: "#6d6256",
+        paper: "var(--theme-paper, #ede8df)",
+        ink: "var(--theme-ink, #242220)",
+        rule: "var(--theme-rule, #d8d1c5)",
+        crimson: "var(--theme-accent, #8c4b2d)",
+        mute: "var(--theme-mute, #756f66)",
       },
       fontFamily: {
         serif: ["var(--font-serif)", "Georgia", "serif"],

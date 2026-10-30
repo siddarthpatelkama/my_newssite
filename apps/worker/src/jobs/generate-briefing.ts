@@ -40,7 +40,10 @@ export async function generateDailyBriefing(date = new Date()) {
     .order("novelty_score", { ascending: false })
     .limit(12);
 
-  if (error) throw error;
+  if (error) {
+    console.warn("[generateDailyBriefing] Error querying recent stories:", error.message);
+  }
+
   if (!stories?.length) {
     const { data: fallbackStories } = await supabase
       .from("stories")
@@ -60,6 +63,35 @@ export async function generateDailyBriefing(date = new Date()) {
 
   if (hasGeminiKey()) {
     try {
+      // Query recent user taste feedback with full design metadata to inform adaptive UI theming
+      const { data: rawTasteRatings } = await supabase
+        .from("ui_taste_feedback")
+        .select("theme_id, score, sentiment, notes")
+        .order("created_at", { ascending: false })
+        .limit(15);
+
+      const parsedTasteRatings = (rawTasteRatings || []).map((row) => {
+        let meta: Record<string, any> = {};
+        try {
+          if (row.notes && row.notes.startsWith("{")) {
+            meta = JSON.parse(row.notes);
+          }
+        } catch {
+          // ignore
+        }
+        return {
+          themeId: row.theme_id,
+          themeName: meta.themeName || row.theme_id,
+          score: row.score,
+          sentiment: row.sentiment,
+          keywords: meta.keywords || [],
+          fontFamily: meta.fontFamily || null,
+          colors: meta.colors || null,
+          atmosphere: meta.atmosphere || null,
+          layoutStyle: meta.layoutStyle || null,
+        };
+      });
+
       const generated = await withJobSpan(
         "gemini.generate_daily_briefing",
         { "gen_ai.operation.name": "generate_daily_briefing" },
@@ -71,6 +103,10 @@ export async function generateDailyBriefing(date = new Date()) {
               summary: story.summary ?? "",
               category: story.category,
             })),
+            {
+              editionDate: edition,
+              tasteRatings: parsedTasteRatings,
+            },
           ),
       );
 
@@ -92,6 +128,7 @@ export async function generateDailyBriefing(date = new Date()) {
         edition,
         layout: validLayout,
         sections: validSections.length > 0 ? validSections : fallbackConfig(edition, stories).sections,
+        themeSpec: generated?.themeSpec,
       });
       if (parsed.success) config = parsed.data;
       title = generated.title || title;
@@ -115,14 +152,36 @@ export async function generateDailyBriefing(date = new Date()) {
       { onConflict: "edition_date" },
     )
     .select("id")
-    .single();
+    .maybeSingle();
 
-  if (briefingError) throw briefingError;
+  if (briefingError) {
+    console.error("[generateDailyBriefing] Error upserting daily_briefings:", briefingError);
+    return { skipped: true, reason: briefingError.message };
+  }
 
-  await supabase.from("dashboard_configs").upsert({
-    briefing_id: briefing.id,
-    config,
-  });
+  if (briefing?.id) {
+    const { error: configError } = await supabase.from("dashboard_configs").upsert(
+      {
+        briefing_id: briefing.id,
+        config,
+      },
+      { onConflict: "briefing_id" },
+    );
+    if (configError) {
+      console.warn("[generateDailyBriefing] Warning upserting dashboard_configs:", configError.message);
+    }
+  }
 
-  return { skipped: false, briefingId: briefing.id, edition };
+  // Storage optimization: prune heavy raw HTML from processed/ignored emails to conserve Supabase free tier
+  try {
+    await supabase
+      .from("emails")
+      .update({ body_html: null })
+      .in("processing_status", ["processed", "ignored"])
+      .not("body_html", "is", null);
+  } catch (pruneErr) {
+    console.warn("[Storage Pruner] Warning pruning legacy body_html:", pruneErr);
+  }
+
+  return { skipped: false, briefingId: briefing?.id, edition };
 }

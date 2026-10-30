@@ -53,20 +53,44 @@ async function upsertEmail(messageId: string, newsletterLabelId: string | null) 
 }
 
 export async function syncGmail(options?: { backfill?: boolean }) {
-  const { data: state, error: stateError } = await supabase
+  let { data: state, error: stateError } = await supabase
     .from("sync_state")
     .select("*")
     .eq("id", "gmail")
-    .single();
-  if (stateError) throw stateError;
+    .maybeSingle();
+
+  if (!state) {
+    console.log("[Gmail Sync] Initializing sync_state row in Supabase...");
+    const { data: created, error: createError } = await supabase
+      .from("sync_state")
+      .upsert({ id: "gmail" }, { onConflict: "id" })
+      .select("*")
+      .single();
+    if (createError) throw createError;
+    state = created;
+  }
+
+  // Check if emails table is empty (e.g. freshly wiped database)
+  const { count: emailCount } = await supabase
+    .from("emails")
+    .select("id", { count: "exact", head: true });
+
+  const isDatabaseEmpty = (emailCount ?? 0) === 0;
+  const shouldBackfill = Boolean(options?.backfill || isDatabaseEmpty || !state?.history_id);
 
   let ids: string[] = [];
   let nextHistoryId: string | undefined;
 
-  if (!options?.backfill && state.history_id) {
+  if (isDatabaseEmpty) {
+    console.log("[Gmail Sync] Emails table is empty. Forcing full inbox scan to populate database...");
+  }
+
+  if (!shouldBackfill && state?.history_id) {
+    console.log(`[Gmail Sync] Checking for new emails since history cursor ${state.history_id}...`);
     const history = await getHistory(state.history_id);
     if (!history.ok) {
-      // Reconcile the labeled mailbox after Gmail has expired the old cursor.
+      // Reconcile mailbox after Gmail has expired old cursor
+      console.log("[Gmail Sync] History cursor expired. Reconciling mailbox...");
       nextHistoryId = await getCurrentHistoryId();
       ids = await listNewsletterMessageIds(Number.MAX_SAFE_INTEGER);
     } else {
@@ -78,14 +102,14 @@ export async function syncGmail(options?: { backfill?: boolean }) {
         }
       }
       ids = [...added];
+      console.log(`[Gmail Sync] Found ${ids.length} new messages in history.`);
     }
   } else {
-    // Capture the cursor before listing so messages arriving during the listing
-    // are picked up by history.list on the next run.
-    if (!state.history_id) {
-      nextHistoryId = await getCurrentHistoryId();
-    }
+    // If no history_id, options.backfill, or emails table is empty: fetch inbox directly
+    console.log("[Gmail Sync] Fetching recent messages from inbox...");
+    nextHistoryId = await getCurrentHistoryId();
     ids = await listNewsletterMessageIds(options?.backfill ? env.MAX_BACKFILL : env.MAX_EMAILS_PER_SYNC);
+    console.log(`[Gmail Sync] Retrieved ${ids.length} message IDs from mailbox.`);
   }
 
   const newsletterLabelId = await getNewsletterLabelId();
@@ -98,7 +122,7 @@ export async function syncGmail(options?: { backfill?: boolean }) {
   const { error: updateError } = await supabase
     .from("sync_state")
     .update({
-      history_id: nextHistoryId ?? state.history_id,
+      history_id: nextHistoryId ?? state?.history_id,
       last_synced_at: new Date().toISOString(),
       last_error: null,
       updated_at: new Date().toISOString(),
