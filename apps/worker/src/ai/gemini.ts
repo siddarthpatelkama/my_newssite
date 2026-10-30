@@ -78,8 +78,8 @@ function getTargetModels(): string[] {
   if (configured && !configured.includes("2.0") && !configured.includes("1.5")) {
     models.push(configured);
   }
-  // Confirmed active models with fastest response and highest availability
-  models.push("gemini-3.8-flash", "gemini-2.5-flash", "gemini-flash-latest");
+  // Prioritize high-capacity models with 1,500 requests/day on free tier
+  models.push("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest");
   return [...new Set(models)];
 }
 
@@ -134,23 +134,27 @@ async function generateJson(prompt: string) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[Gemini] Key #${index} (${masked}) failed on ${model}: ${message}`);
 
-        // If key is invalid (400), unauthenticated (401/403), or quota reached (429),
-        // don't waste time on this key; jump immediately to the next key in the pool
+        // If key itself is invalid (400) or unauthenticated (401/403),
+        // don't waste time trying more models on this key; jump immediately to the next key
         if (
           message.includes("API_KEY_INVALID") ||
           message.includes("API key not valid") ||
           message.includes("400") ||
           message.includes("401") ||
-          message.includes("403") ||
-          message.includes("429") ||
-          message.includes("RESOURCE_EXHAUSTED") ||
-          message.includes("quota") ||
-          message.includes("rate limit")
+          message.includes("403")
         ) {
           console.warn(
-            `[Gemini] Key #${index} (${masked}) unusable (${message.slice(0, 80)}). Rotating to next API key immediately...`,
+            `[Gemini] Key #${index} (${masked}) authentication failed (${message.slice(0, 80)}). Rotating to next API key immediately...`,
           );
           break; // Break model loop, advance to next key in outer loop
+        }
+
+        // For 429 / quota errors or 503 unavailable, log and continue to try
+        // other models (e.g. gemini-2.5-flash has separate quota from gemini-3.8-flash)
+        if (message.includes("429") || message.includes("RESOURCE_EXHAUSTED") || message.includes("quota")) {
+          console.warn(
+            `[Gemini] ${model} quota reached on key #${index} (${masked}). Attempting fallback model...`,
+          );
         }
       }
     }
