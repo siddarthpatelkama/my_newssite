@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { UiTasteRatingBar } from "./UiTasteRatingBar";
 
 export type ThemeId =
   | "god-rays"
@@ -160,9 +159,6 @@ export function ThemeSwitcherDock({ currentTheme }: { currentTheme: ThemeId }) {
           {defaultSaved === currentTheme ? "★ Default" : "Set Default"}
         </button>
       </div>
-
-      {/* Floating 0-100 Like/Dislike Rating Bar in Bottom-Right Corner */}
-      <UiTasteRatingBar currentTheme={currentTheme} />
     </div>
   );
 }

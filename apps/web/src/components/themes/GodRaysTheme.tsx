@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 import { ThemeSwitcherDock } from "@/components/theme/ThemeSwitcherDock";
+import { UiTasteRatingBar } from "@/components/theme/UiTasteRatingBar";
 
 export function GodRaysTheme({
   stories,
@@ -255,8 +256,13 @@ export function GodRaysTheme({
           </div>
         </section>
 
+        {/* Real User Rating Slider Section at the end of the page */}
+        <div className="mt-14">
+          <UiTasteRatingBar currentTheme="god-rays" />
+        </div>
+
         {/* Footer */}
-        <footer className="mt-20 border-t border-amber-300/15 pt-8 text-center text-xs text-amber-200/50">
+        <footer className="mt-12 border-t border-amber-300/15 pt-8 text-center text-xs text-amber-200/50">
           <p>SignalOS · The Celestial Edition · Powered by Google Gemini</p>
         </footer>
       </div>

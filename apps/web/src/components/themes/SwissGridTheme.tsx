@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 import { ThemeSwitcherDock } from "@/components/theme/ThemeSwitcherDock";
+import { UiTasteRatingBar } from "@/components/theme/UiTasteRatingBar";
 
 export function SwissGridTheme({
   stories,
@@ -141,7 +142,12 @@ export function SwissGridTheme({
           </div>
         </section>
 
-        <footer className="mt-20 border-t-2 border-black pt-6 text-center font-mono text-xs font-bold uppercase">
+        {/* Real User Rating Slider Section at the end of the page */}
+        <div className="mt-14">
+          <UiTasteRatingBar currentTheme="swiss-grid" />
+        </div>
+
+        <footer className="mt-12 border-t-2 border-black pt-6 text-center font-mono text-xs font-bold uppercase">
           SIGNAL_OS {"//"} INTERNATIONAL TYPOGRAPHIC SYSTEM {"//"} 2026
         </footer>
       </div>

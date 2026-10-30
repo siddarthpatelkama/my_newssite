@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 import { ThemeSwitcherDock } from "@/components/theme/ThemeSwitcherDock";
+import { UiTasteRatingBar } from "@/components/theme/UiTasteRatingBar";
 
 export function TokyoNightTheme({
   stories,
@@ -156,7 +157,12 @@ export function TokyoNightTheme({
           </div>
         </section>
 
-        <footer className="mt-16 border-t border-slate-800/80 pt-6 text-center font-mono text-xs text-slate-500">
+        {/* Real User Rating Slider Section at the end of the page */}
+        <div className="mt-14">
+          <UiTasteRatingBar currentTheme="tokyo-night" />
+        </div>
+
+        <footer className="mt-12 border-t border-slate-800/80 pt-6 text-center font-mono text-xs text-slate-500">
           SIGNAL_OS {"//"} TOKYO_NIGHT_EDITION {"//"} 2026
         </footer>
       </div>

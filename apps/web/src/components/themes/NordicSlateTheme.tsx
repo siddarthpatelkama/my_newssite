@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 import { ThemeSwitcherDock } from "@/components/theme/ThemeSwitcherDock";
+import { UiTasteRatingBar } from "@/components/theme/UiTasteRatingBar";
 
 export function NordicSlateTheme({
   stories,
@@ -143,7 +144,12 @@ export function NordicSlateTheme({
           </div>
         </section>
 
-        <footer className="mt-20 border-t border-[#29332e] pt-6 text-center text-xs text-[#71806f]">
+        {/* Real User Rating Slider Section at the end of the page */}
+        <div className="mt-14">
+          <UiTasteRatingBar currentTheme="nordic-slate" />
+        </div>
+
+        <footer className="mt-12 border-t border-[#29332e] pt-6 text-center text-xs text-[#71806f]">
           SignalOS · Scandinavian Basalt Edition · Quiet intelligence
         </footer>
       </div>

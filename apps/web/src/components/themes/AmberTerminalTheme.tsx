@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 import { ThemeSwitcherDock } from "@/components/theme/ThemeSwitcherDock";
+import { UiTasteRatingBar } from "@/components/theme/UiTasteRatingBar";
 
 export function AmberTerminalTheme({
   stories,
@@ -144,7 +145,12 @@ export function AmberTerminalTheme({
           </div>
         </section>
 
-        <footer className="mt-20 border-t border-[#382604] pt-6 text-center text-xs text-[#92400e]">
+        {/* Real User Rating Slider Section at the end of the page */}
+        <div className="mt-14">
+          <UiTasteRatingBar currentTheme="amber-terminal" />
+        </div>
+
+        <footer className="mt-12 border-t border-[#382604] pt-6 text-center text-xs text-[#92400e]">
           TERMINAL END {"//"} SIGNAL_OS PHOSPHOR_EDITION {"//"} 2026
         </footer>
       </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 import { ThemeSwitcherDock } from "@/components/theme/ThemeSwitcherDock";
+import { UiTasteRatingBar } from "@/components/theme/UiTasteRatingBar";
 
 export function BroadsheetTheme({
   stories,
@@ -152,7 +153,12 @@ export function BroadsheetTheme({
           </div>
         </section>
 
-        <footer className="mt-16 border-t-2 border-[#141210] pt-6 text-center font-sans text-xs uppercase tracking-widest text-[#635a4f]">
+        {/* Real User Rating Slider Section at the end of the page */}
+        <div className="mt-14">
+          <UiTasteRatingBar currentTheme="broadsheet" />
+        </div>
+
+        <footer className="mt-12 border-t-2 border-[#141210] pt-6 text-center font-sans text-xs uppercase tracking-widest text-[#635a4f]">
           Printed electronically by SignalOS · Verbatim et Literatim
         </footer>
       </div>

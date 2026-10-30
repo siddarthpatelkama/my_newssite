@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 import { ThemeSwitcherDock } from "@/components/theme/ThemeSwitcherDock";
+import { UiTasteRatingBar } from "@/components/theme/UiTasteRatingBar";
 
 export function KyotoSandTheme({
   stories,
@@ -146,7 +147,12 @@ export function KyotoSandTheme({
           </div>
         </section>
 
-        <footer className="mt-20 border-t border-[#dad2c4] pt-6 text-center font-sans text-xs text-[#787166]">
+        {/* Real User Rating Slider Section at the end of the page */}
+        <div className="mt-14">
+          <UiTasteRatingBar currentTheme="kyoto-sand" />
+        </div>
+
+        <footer className="mt-12 border-t border-[#dad2c4] pt-6 text-center font-sans text-xs text-[#787166]">
           SignalOS · Kyoto Sand &amp; Sumi Edition · 2026
         </footer>
       </div>
