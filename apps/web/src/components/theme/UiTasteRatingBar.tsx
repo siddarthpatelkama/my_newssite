@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ThemeId } from "./ThemeSwitcherDock";
+
+export type ThemeId = string;
 
 export function UiTasteRatingBar({ currentTheme }: { currentTheme: ThemeId }) {
   const [isOpen, setIsOpen] = useState(false);
