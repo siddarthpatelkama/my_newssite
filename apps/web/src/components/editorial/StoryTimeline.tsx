@@ -138,3 +138,4 @@ export function StoryTimeline({ timeline, relatedHistoricalStories }: StoryTimel
     </section>
   );
 }
+

@@ -16,3 +16,4 @@ create index if not exists stories_last_updated_idx
 
 create index if not exists stories_first_seen_idx
   on public.stories(first_seen_at desc);
+

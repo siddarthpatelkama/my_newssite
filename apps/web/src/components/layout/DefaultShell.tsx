@@ -52,18 +52,6 @@ export async function DefaultShell({
         <div className="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-transparent via-transparent to-black/30" />
       ) : null}
 
-      {/* Dynamic Daily Theme Badge */}
-      {activeSpec?.headlineBadge ? (
-        <div className="relative z-10 w-full border-b border-rule/30 bg-paper/60 backdrop-blur py-1.5 text-center text-[11px] font-mono tracking-wider text-mute uppercase">
-          {activeSpec.headlineBadge}
-          {activeSpec.reasoning ? (
-            <span className="hidden md:inline text-mute/70 font-sans normal-case ml-2">
-              — {activeSpec.reasoning}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="relative z-10 mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-6 sm:px-8">
         <SiteHeader />
         {children}
