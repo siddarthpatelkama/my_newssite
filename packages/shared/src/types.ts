@@ -26,6 +26,32 @@ export type StorySource = {
   newsletterName: string | null;
 };
 
+export type StoryTimelineMilestone = {
+  date: string;
+  title: string;
+  description: string;
+  storyId?: string;
+  sourceNote?: string;
+};
+
+export type StoryWithRelations = Story & {
+  sources: StorySource[];
+  storyUpdates: Array<{
+    id: string;
+    note: string;
+    createdAt: string;
+    relatedStoryId?: string | null;
+  }>;
+  relatedStories: Array<{
+    id: string;
+    canonicalTitle: string;
+    summary: string | null;
+    category: StoryCategory | null;
+    firstSeenAt: string;
+  }>;
+  timeline: StoryTimelineMilestone[];
+};
+
 export type DailyBriefing = {
   id: string;
   editionDate: string;

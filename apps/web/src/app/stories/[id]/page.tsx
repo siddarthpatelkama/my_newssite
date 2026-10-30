@@ -2,15 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DefaultShell } from "@/components/layout/DefaultShell";
 import { SourceList } from "@/components/editorial/SourceList";
+import { StoryTimeline } from "@/components/editorial/StoryTimeline";
 import { StoryFeedback } from "@/components/telemetry/StoryFeedback";
 import { getStories, getStory } from "@/lib/queries";
 
 export default async function StoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const stories = await getStories();
-  const story = stories.find((s) => s.id === id) ?? (await getStory(id));
+  const story = await getStory(id);
   if (!story) notFound();
 
+  const stories = await getStories();
   const currentIndex = stories.findIndex((s) => s.id === id);
   const nextStory = currentIndex >= 0 && currentIndex < stories.length - 1 ? stories[currentIndex + 1] : null;
   const prevStory = currentIndex > 0 ? stories[currentIndex - 1] : null;
@@ -34,6 +35,13 @@ export default async function StoryPage({ params }: { params: Promise<{ id: stri
             </li>
           ))}
         </ul>
+
+        {/* Historical Evolution & Precedent Timeline across weeks and months */}
+        <StoryTimeline
+          timeline={story.timeline}
+          relatedHistoricalStories={story.relatedHistoricalStories}
+        />
+
         <div className="mt-10">
           <SourceList sources={story.sources} />
         </div>

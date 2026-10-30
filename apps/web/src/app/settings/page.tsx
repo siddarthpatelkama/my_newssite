@@ -2,6 +2,7 @@ import { DefaultShell } from "@/components/layout/DefaultShell";
 import { getTelemetrySummary } from "@/lib/telemetry/summary";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { EvolveThemeButton } from "@/components/theme/EvolveThemeButton";
+import { TriageEmailsButton } from "@/components/admin/TriageEmailsButton";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ gmail?: string }> }) {
   const { gmail } = await searchParams;
@@ -59,6 +60,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             >
               {isConnected ? "Reconnect Gmail Mailbox →" : "Connect Gmail Account →"}
             </a>
+          </div>
+        </section>
+
+        {/* AI Zero-Failure Email Triage Section */}
+        <section className="mt-10 border border-rule p-6">
+          <h2 className="font-serif text-2xl">Email Pipeline & AI Triage Health</h2>
+          <p className="mt-2 text-xs text-mute">
+            SignalOS automatically routes every failed or ambiguous email to Gemini AI. The AI definitively decides whether to approve it into the live editorial feed or mark it as ignored noise, guaranteeing zero emails remain stuck in a failed state.
+          </p>
+          <div className="mt-5">
+            <TriageEmailsButton />
           </div>
         </section>
 

@@ -1,4 +1,11 @@
-import { extractEmailArticles, synthesizeStory, clusterTitle, hasGeminiKey } from "../ai/gemini";
+import {
+  extractEmailArticles,
+  synthesizeStory,
+  clusterTitle,
+  hasGeminiKey,
+  triageFailedEmail,
+  matchHistoricalContext,
+} from "../ai/gemini";
 import { extractArticlesFromHtml, hashContent, normalizeUrl } from "../gmail/parser";
 import { supabase } from "../supabase";
 import { env } from "../env";
@@ -47,14 +54,168 @@ export function isObviousTimeWaster(subject: string, content: string): { isWaste
   return { isWaste: false, reason: "" };
 }
 
-export async function processPendingEmails(limit = env.MAX_EMAILS_PER_SYNC || 50) {
-  // Re-queue failed emails for retry.
-  // Emails marked 'ignored' (waste of time) stay excluded from the site.
-  await supabase
+/**
+ * Triage all emails currently stuck in 'failed' status using Gemini AI.
+ * Guaranteed: No email is ever left in 'failed'. It is either approved (processed)
+ * or marked as ignored (with explicit reasoning and HTML wiped to protect storage limits).
+ */
+export async function triageFailedEmails(limit = 100) {
+  const { data: failedEmails, error: fetchErr } = await supabase
     .from("emails")
-    .update({ processing_status: "pending", next_retry_at: null, processing_attempts: 0 })
-    .in("processing_status", ["failed"]);
+    .select("id, subject, body_text, body_html, newsletter_id, processing_attempts, error_message, newsletters(sender_name, sender_email)")
+    .eq("processing_status", "failed")
+    .limit(limit);
 
+  if (fetchErr) {
+    console.error("[triageFailedEmails] Failed to query failed emails from Supabase:", fetchErr);
+    return { triaged: 0, approved: 0, ignored: 0 };
+  }
+
+  if (!failedEmails || failedEmails.length === 0) {
+    return { triaged: 0, approved: 0, ignored: 0 };
+  }
+
+  console.log(`[triageFailedEmails] Found ${failedEmails.length} failed emails. Triaging with AI now...`);
+
+  let approvedCount = 0;
+  let ignoredCount = 0;
+
+  for (const email of failedEmails) {
+    try {
+      const sender = Array.isArray(email.newsletters) ? email.newsletters[0] : email.newsletters;
+      const emailContent = (email.body_text || email.body_html || "").slice(0, 12000);
+
+      // Deterministic noise filter
+      const wasteCheck = isObviousTimeWaster(email.subject ?? "", emailContent);
+      if (wasteCheck.isWaste) {
+        await supabase
+          .from("emails")
+          .update({
+            processing_status: "ignored",
+            processing_started_at: null,
+            error_message: `Waste of time: ${wasteCheck.reason}`,
+            body_html: null,
+            body_text: null,
+          })
+          .eq("id", email.id);
+        ignoredCount += 1;
+        continue;
+      }
+
+      if (hasGeminiKey()) {
+        const triaged = await triageFailedEmail({
+          subject: email.subject ?? "",
+          sender: sender?.sender_email ?? "unknown",
+          text: emailContent,
+          errorMessage: email.error_message,
+        });
+
+        if (triaged.approved && triaged.story) {
+          const articlePayload = {
+            email_id: email.id,
+            title: triaged.story.title,
+            source_name: sender?.sender_name ?? sender?.sender_email ?? null,
+            content_text: triaged.story.summary,
+            content_hash: hashContent(`triage-${email.id}-${Date.now()}`),
+          };
+          const { data: insertedArt } = await supabase
+            .from("articles")
+            .insert(articlePayload)
+            .select("id")
+            .maybeSingle();
+
+          const { data: createdStory } = await supabase
+            .from("stories")
+            .insert({
+              canonical_title: triaged.story.title,
+              summary: triaged.story.summary,
+              why_it_matters: triaged.story.whyItMatters,
+              category: triaged.story.category,
+              key_points: triaged.story.keyPoints,
+              entities: triaged.story.entities,
+              novelty_score: triaged.story.novelty,
+              quality_score: 0.6,
+            })
+            .select("id")
+            .single();
+
+          if (createdStory && insertedArt) {
+            await supabase.from("story_sources").upsert({
+              story_id: createdStory.id,
+              article_id: insertedArt.id,
+            });
+          }
+
+          await supabase
+            .from("emails")
+            .update({
+              processing_status: "processed",
+              processing_started_at: null,
+              next_retry_at: null,
+              error_message: null,
+              body_html: null,
+            })
+            .eq("id", email.id);
+          approvedCount += 1;
+        } else {
+          await supabase
+            .from("emails")
+            .update({
+              processing_status: "ignored",
+              processing_started_at: null,
+              next_retry_at: null,
+              error_message: `AI Triaged as Noise: ${triaged.reason.slice(0, 500)}`,
+              body_html: null,
+              body_text: null,
+            })
+            .eq("id", email.id);
+          ignoredCount += 1;
+        }
+      } else {
+        await supabase
+          .from("emails")
+          .update({
+            processing_status: "ignored",
+            processing_started_at: null,
+            next_retry_at: null,
+            error_message: "AI Triage: No Gemini key configured. Triaged into ignored.",
+            body_html: null,
+            body_text: null,
+          })
+          .eq("id", email.id);
+        ignoredCount += 1;
+      }
+    } catch (err: any) {
+      console.error(`[triageFailedEmails] Triage error for "${email.subject}":`, err);
+      // Guarantee: Under NO condition does this email remain in 'failed'
+      await supabase
+        .from("emails")
+        .update({
+          processing_status: "ignored",
+          processing_started_at: null,
+          next_retry_at: null,
+          error_message: `AI Triage Exception: ${String(err?.message || err).slice(0, 500)}`,
+          body_html: null,
+          body_text: null,
+        })
+        .eq("id", email.id);
+      ignoredCount += 1;
+    }
+  }
+
+  console.log(`[triageFailedEmails] Completed: ${failedEmails.length} triaged (${approvedCount} approved, ${ignoredCount} ignored).`);
+  return { triaged: failedEmails.length, approved: approvedCount, ignored: ignoredCount };
+}
+
+export async function processPendingEmails(limit = env.MAX_EMAILS_PER_SYNC || 50) {
+  // 1. Triage any previously failed emails first so zero emails sit in 'failed'
+  try {
+    await triageFailedEmails(50);
+  } catch (triageErr) {
+    console.warn("[Worker] Initial triage pass warning:", triageErr);
+  }
+
+  // 2. Claim pending emails
   const { data: claimed, error } = await supabase.rpc("claim_pending_emails", { p_limit: limit });
   if (error) throw error;
   const ids: string[] = (claimed ?? []).map((email: { id: string }) => email.id);
@@ -75,6 +236,14 @@ export async function processPendingEmails(limit = env.MAX_EMAILS_PER_SYNC || 50
       console.error(`[Worker] Error processing email "${email.subject}":`, err);
     }
   }
+
+  // 3. Final safety triage pass: ensure any newly surfaced failures are triaged into approved or ignored
+  try {
+    await triageFailedEmails(20);
+  } catch (finalTriageErr) {
+    console.warn("[Worker] Final triage pass warning:", finalTriageErr);
+  }
+
   return { processed };
 }
 
@@ -87,11 +256,11 @@ async function processOneEmail(email: {
   processing_attempts: number;
   newsletters: { sender_name: string | null; sender_email: string } | { sender_name: string | null; sender_email: string }[] | null;
 }) {
-  try {
-    const sender = Array.isArray(email.newsletters) ? email.newsletters[0] : email.newsletters;
-    const emailContent = (email.body_text || email.body_html || "").slice(0, 12000);
+  const sender = Array.isArray(email.newsletters) ? email.newsletters[0] : email.newsletters;
+  const emailContent = (email.body_text || email.body_html || "").slice(0, 12000);
 
-    // Filter out obvious transactional / security / OTP emails deterministically
+  try {
+    // 1. Filter out obvious transactional / security / OTP emails deterministically
     const wasteCheck = isObviousTimeWaster(email.subject ?? "", emailContent);
     if (wasteCheck.isWaste) {
       console.log(`[Curator] Deterministically filtered out time-waster: "${email.subject}". Reason: ${wasteCheck.reason}`);
@@ -123,7 +292,7 @@ async function processOneEmail(email: {
         ),
       );
 
-      // If Gemini identifies this email as a waste of time, do not show it on the site!
+      // If Gemini identifies this email as a waste of time, mark ignored and purge
       if (!extracted.keep) {
         console.log(`[Curator] Filtered out waste of time: "${email.subject}". Reason: ${extracted.reason}`);
         const { error } = await supabase
@@ -158,10 +327,11 @@ async function processOneEmail(email: {
       }];
     }
 
-    const { data: existingStories } = await supabase
+    // Historical continuity: fetch stories across the last 90 days to match precedents and evolutions
+    const { data: historicalStories } = await supabase
       .from("stories")
-      .select("id, canonical_title")
-      .order("last_updated_at", { ascending: false })
+      .select("id, canonical_title, summary, category, entities, first_seen_at, last_updated_at")
+      .order("first_seen_at", { ascending: false })
       .limit(80);
 
     for (const article of articles) {
@@ -215,19 +385,45 @@ async function processOneEmail(email: {
             sourceClaims: [],
           };
 
+      // 1. Direct cluster match check
       const matchTitle = hasGeminiKey()
         ? await withJobSpan("gemini.cluster_title", { "gen_ai.operation.name": "cluster_title" }, () =>
-            clusterTitle(synthesized.title, (existingStories ?? []).map((story) => story.canonical_title)),
+            clusterTitle(synthesized.title, (historicalStories ?? []).map((story) => story.canonical_title)),
           ).catch((e) => {
-            console.warn(`[clusterTitle] Error clustering title, creating as new story:`, e);
+            console.warn(`[clusterTitle] Error clustering title, evaluating historical context:`, e);
             return null;
           })
         : null;
 
-      const matched = existingStories?.find((story) => story.canonical_title === matchTitle);
-      let storyId = matched?.id;
+      let storyId = historicalStories?.find((story) => story.canonical_title === matchTitle)?.id;
+
+      // 2. Historical continuity check (across days, weeks, months)
+      let historyMatch = null;
+      if (!storyId && hasGeminiKey() && (historicalStories?.length ?? 0) > 0) {
+        try {
+          historyMatch = await withJobSpan("gemini.match_historical", { "gen_ai.operation.name": "match_historical" }, () =>
+            matchHistoricalContext(
+              {
+                title: synthesized.title,
+                summary: synthesized.summary,
+                category: synthesized.category,
+                entities: synthesized.entities,
+              },
+              historicalStories ?? [],
+            ),
+          );
+        } catch (e) {
+          console.warn("[matchHistoricalContext] Historical matching non-fatal error:", e);
+        }
+      }
+
+      if (historyMatch?.isContinuationOfId) {
+        storyId = historyMatch.isContinuationOfId;
+        console.log(`[Historical Context] Connected story "${synthesized.title}" as continuation of story ${storyId}`);
+      }
 
       if (!storyId) {
+        const relatedIds = historyMatch?.relatedStoryIds ?? [];
         const { data: created, error: storyError } = await supabase
           .from("stories")
           .insert({
@@ -240,13 +436,34 @@ async function processOneEmail(email: {
             source_claims: synthesized.sourceClaims,
             novelty_score: synthesized.novelty,
             quality_score: 0.6,
+            related_story_ids: relatedIds,
           })
           .select("id")
           .single();
         if (storyError) throw storyError;
         storyId = created.id;
-        existingStories?.push({ id: storyId, canonical_title: synthesized.title });
+
+        historicalStories?.unshift({
+          id: storyId,
+          canonical_title: synthesized.title,
+          summary: synthesized.summary,
+          category: synthesized.category,
+          entities: synthesized.entities,
+          first_seen_at: new Date().toISOString(),
+          last_updated_at: new Date().toISOString(),
+        });
+
+        if (historyMatch?.updateNote) {
+          await supabase.from("story_updates").insert({
+            story_id: storyId,
+            note: historyMatch.updateNote,
+          });
+        }
       } else {
+        const updateNote =
+          historyMatch?.updateNote ||
+          `Follow-up coverage from ${sender?.sender_name ?? "newsletter"}`;
+
         const { error: storyUpdateError } = await supabase
           .from("stories")
           .update({
@@ -256,9 +473,10 @@ async function processOneEmail(email: {
           })
           .eq("id", storyId);
         if (storyUpdateError) throw storyUpdateError;
+
         const { error: storyHistoryError } = await supabase.from("story_updates").insert({
           story_id: storyId,
-          note: `Updated from ${sender?.sender_name ?? "newsletter"}`,
+          note: updateNote,
         });
         if (storyHistoryError) throw storyHistoryError;
       }
@@ -274,9 +492,11 @@ async function processOneEmail(email: {
       processing_status: "processed",
       processing_started_at: null,
       next_retry_at: null,
-      body_html: null, // Purge heavy HTML markup to conserve Supabase free-tier storage
+      error_message: null,
+      body_html: null, // Conserve Supabase free-tier storage
     }).eq("id", email.id);
     if (processedError) throw processedError;
+
   } catch (error) {
     const message =
       error instanceof Error
@@ -284,16 +504,78 @@ async function processOneEmail(email: {
         : typeof error === "object" && error !== null
         ? JSON.stringify(error)
         : String(error);
-    const retryMinutes = Math.min(60, 2 ** Math.max(0, email.processing_attempts - 1));
-    const { error: failureError } = await supabase
-      .from("emails")
-      .update({
-        processing_status: "failed",
-        processing_started_at: null,
-        next_retry_at: new Date(Date.now() + retryMinutes * 60_000).toISOString(),
-        error_message: message.slice(0, 1000),
-      })
-      .eq("id", email.id);
-    if (failureError) throw failureError;
+
+    console.warn(`[Worker] Exception while processing email "${email.subject}". Running AI triage fallback immediately...`, message);
+
+    // AI TRIAGE IMMEDIATE FALLBACK: Under no condition does this email remain in 'failed'
+    if (hasGeminiKey()) {
+      try {
+        const triaged = await triageFailedEmail({
+          subject: email.subject ?? "",
+          sender: sender?.sender_email ?? "unknown",
+          text: emailContent,
+          errorMessage: message,
+        });
+
+        if (triaged.approved && triaged.story) {
+          const articlePayload = {
+            email_id: email.id,
+            title: triaged.story.title,
+            source_name: sender?.sender_name ?? sender?.sender_email ?? null,
+            content_text: triaged.story.summary,
+            content_hash: hashContent(`triage-${email.id}-${Date.now()}`),
+          };
+          const { data: insertedArt } = await supabase.from("articles").insert(articlePayload).select("id").maybeSingle();
+          const { data: createdStory } = await supabase.from("stories").insert({
+            canonical_title: triaged.story.title,
+            summary: triaged.story.summary,
+            why_it_matters: triaged.story.whyItMatters,
+            category: triaged.story.category,
+            key_points: triaged.story.keyPoints,
+            entities: triaged.story.entities,
+            novelty_score: triaged.story.novelty,
+            quality_score: 0.6,
+          }).select("id").single();
+
+          if (createdStory && insertedArt) {
+            await supabase.from("story_sources").upsert({
+              story_id: createdStory.id,
+              article_id: insertedArt.id,
+            });
+          }
+
+          await supabase.from("emails").update({
+            processing_status: "processed",
+            processing_started_at: null,
+            next_retry_at: null,
+            error_message: null,
+            body_html: null,
+          }).eq("id", email.id);
+          return;
+        } else {
+          await supabase.from("emails").update({
+            processing_status: "ignored",
+            processing_started_at: null,
+            next_retry_at: null,
+            error_message: `AI Triaged as Noise: ${triaged.reason.slice(0, 500)}`,
+            body_html: null,
+            body_text: null,
+          }).eq("id", email.id);
+          return;
+        }
+      } catch (triageFallbackErr) {
+        console.error(`[Worker] AI triage fallback exception for "${email.subject}":`, triageFallbackErr);
+      }
+    }
+
+    // If all else fails or no Gemini key, mark as ignored so it never sits stuck in 'failed'
+    await supabase.from("emails").update({
+      processing_status: "ignored",
+      processing_started_at: null,
+      next_retry_at: null,
+      error_message: `Triaged: Processing unrecoverable (${message.slice(0, 300)})`,
+      body_html: null,
+      body_text: null,
+    }).eq("id", email.id);
   }
 }

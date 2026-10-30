@@ -23,6 +23,31 @@ export type StoryRecord = {
   }>;
 };
 
+export type StoryMilestone = {
+  date: string;
+  label: string;
+  description: string;
+  relatedStoryId?: string | null;
+  relatedStoryTitle?: string | null;
+};
+
+export type StoryDetailRecord = StoryRecord & {
+  storyUpdates: Array<{
+    id: string;
+    note: string;
+    createdAt: string;
+    relatedStoryId?: string | null;
+  }>;
+  relatedHistoricalStories: Array<{
+    id: string;
+    canonicalTitle: string;
+    summary: string | null;
+    category: string | null;
+    firstSeenAt: string;
+  }>;
+  timeline: StoryMilestone[];
+};
+
 type StoryRow = {
   id: string;
   canonical_title: string;
@@ -35,6 +60,7 @@ type StoryRow = {
   quality_score: number | null;
   first_seen_at: string;
   last_updated_at: string;
+  related_story_ids?: string[] | null;
   story_sources: Array<{
     article_id: string;
     articles: {
@@ -129,9 +155,207 @@ export async function getStories(): Promise<StoryRecord[]> {
   return mapped;
 }
 
-export async function getStory(id: string) {
-  const stories = await getStories();
-  return stories.find((story) => story.id === id) ?? null;
+export async function getStory(id: string): Promise<StoryDetailRecord | null> {
+  if (demoMode) {
+    const story = demoStories.find((s) => s.id === id);
+    if (!story) return null;
+    const otherStories = demoStories.filter((s) => s.id !== id);
+    return {
+      ...story,
+      storyUpdates: [
+        {
+          id: "upd-1",
+          note: "Initial emergence: Core architecture paradigm shift first highlighted across lab reports.",
+          createdAt: story.firstSeenAt,
+          relatedStoryId: otherStories[0]?.id ?? null,
+        },
+        {
+          id: "upd-2",
+          note: "Follow-up verification: Open benchmarks confirmed execution speedups and autonomous reasoning breakthroughs.",
+          createdAt: story.lastUpdatedAt,
+          relatedStoryId: otherStories[1]?.id ?? null,
+        },
+      ],
+      relatedHistoricalStories: otherStories.map((o) => ({
+        id: o.id,
+        canonicalTitle: o.canonicalTitle,
+        summary: o.summary,
+        category: o.category,
+        firstSeenAt: o.firstSeenAt,
+      })),
+      timeline: [
+        {
+          date: story.firstSeenAt.slice(0, 10),
+          label: "Historical Emergence",
+          description: "Initial discovery & discussion surfaced across incoming newsletters.",
+          relatedStoryId: otherStories[0]?.id ?? null,
+          relatedStoryTitle: otherStories[0]?.canonicalTitle ?? null,
+        },
+        {
+          date: story.lastUpdatedAt.slice(0, 10),
+          label: "Latest Continuity Milestone",
+          description: story.summary || "Latest developments synthesized into primary briefing card.",
+        },
+      ],
+    };
+  }
+
+  const supabase = createAdminSupabase();
+  if (!supabase) return null;
+
+  // 1. Fetch the primary story record
+  let storyRow: StoryRow | null = null;
+  const directRes = await supabase
+    .from("stories")
+    .select(
+      "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, related_story_ids, story_sources(article_id, articles(id, title, canonical_url, source_name))",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (directRes.error) {
+    // If table lacks related_story_ids column yet, fallback to basic select
+    const fallbackRes = await supabase
+      .from("stories")
+      .select(
+        "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, story_sources(article_id, articles(id, title, canonical_url, source_name))",
+      )
+      .eq("id", id)
+      .maybeSingle();
+    storyRow = fallbackRes.data as unknown as StoryRow | null;
+  } else {
+    storyRow = directRes.data as unknown as StoryRow | null;
+  }
+
+  if (!storyRow) {
+    const all = await getStories();
+    const fallback = all.find((s) => s.id === id);
+    if (!fallback) return null;
+    return {
+      ...fallback,
+      storyUpdates: [],
+      relatedHistoricalStories: [],
+      timeline: [
+        {
+          date: fallback.firstSeenAt.slice(0, 10),
+          label: "First Coverage",
+          description: fallback.canonicalTitle,
+        },
+      ],
+    };
+  }
+
+  const baseStory: StoryRecord = {
+    id: storyRow.id,
+    canonicalTitle: storyRow.canonical_title,
+    summary: storyRow.summary,
+    whyItMatters: storyRow.why_it_matters,
+    category: storyRow.category,
+    keyPoints: storyRow.key_points ?? [],
+    entities: storyRow.entities ?? [],
+    noveltyScore: storyRow.novelty_score,
+    qualityScore: storyRow.quality_score,
+    firstSeenAt: storyRow.first_seen_at,
+    lastUpdatedAt: storyRow.last_updated_at,
+    sources:
+      storyRow.story_sources?.flatMap((row) => {
+        if (!row.articles) return [];
+        return Array.isArray(row.articles) ? row.articles.map(mapArticle) : [mapArticle(row.articles)];
+      }) ?? [],
+  };
+
+  // 2. Fetch story updates
+  const { data: rawUpdates } = await supabase
+    .from("story_updates")
+    .select("id, note, created_at")
+    .eq("story_id", id)
+    .order("created_at", { ascending: true });
+
+  const storyUpdates = (rawUpdates ?? []).map((u) => ({
+    id: u.id,
+    note: u.note,
+    createdAt: u.created_at,
+    relatedStoryId: null as string | null,
+  }));
+
+  // 3. Collect historical related stories
+  const relatedIds = new Set<string>();
+  if (Array.isArray(storyRow.related_story_ids)) {
+    for (const rid of storyRow.related_story_ids) {
+      if (typeof rid === "string" && rid !== id) relatedIds.add(rid);
+    }
+  }
+
+  // Also query other stories that share common key entities
+  if (relatedIds.size < 3 && storyRow.entities && storyRow.entities.length > 0) {
+    const { data: entityMatches } = await supabase
+      .from("stories")
+      .select("id")
+      .neq("id", id)
+      .overlaps("entities", storyRow.entities.slice(0, 3))
+      .order("first_seen_at", { ascending: false })
+      .limit(3);
+
+    for (const em of entityMatches ?? []) {
+      relatedIds.add(em.id);
+    }
+  }
+
+  let relatedHistoricalStories: StoryDetailRecord["relatedHistoricalStories"] = [];
+  if (relatedIds.size > 0) {
+    const { data: relatedRows } = await supabase
+      .from("stories")
+      .select("id, canonical_title, summary, category, first_seen_at")
+      .in("id", Array.from(relatedIds).slice(0, 5));
+
+    if (relatedRows) {
+      relatedHistoricalStories = relatedRows.map((r) => ({
+        id: r.id,
+        canonicalTitle: r.canonical_title,
+        summary: r.summary,
+        category: r.category,
+        firstSeenAt: r.first_seen_at,
+      }));
+    }
+  }
+
+  // 4. Construct rich chronological timeline across time
+  const timeline: StoryMilestone[] = [
+    {
+      date: storyRow.first_seen_at.slice(0, 10),
+      label: "Initial Emergence",
+      description: `First reported in newsletter briefing: "${storyRow.canonical_title}"`,
+    },
+  ];
+
+  for (const upd of storyUpdates) {
+    timeline.push({
+      date: upd.createdAt.slice(0, 10),
+      label: "Developing Story Update",
+      description: upd.note,
+    });
+  }
+
+  // If there are related historical stories from last week or last month, anchor them into the timeline
+  for (const hist of relatedHistoricalStories) {
+    timeline.push({
+      date: hist.firstSeenAt.slice(0, 10),
+      label: "Related Historical Coverage",
+      description: hist.canonicalTitle,
+      relatedStoryId: hist.id,
+      relatedStoryTitle: hist.canonicalTitle,
+    });
+  }
+
+  // Sort timeline chronologically
+  timeline.sort((a, b) => (a.date > b.date ? 1 : -1));
+
+  return {
+    ...baseStory,
+    storyUpdates,
+    relatedHistoricalStories,
+    timeline,
+  };
 }
 
 export async function getBriefing(stories: StoryRecord[]) {
@@ -186,4 +410,3 @@ export async function getActiveThemeSpec(): Promise<ThemeSpec | null> {
   const briefing = await getBriefing([]);
   return briefing.themeSpec ?? null;
 }
-

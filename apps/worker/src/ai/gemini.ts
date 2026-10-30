@@ -447,3 +447,208 @@ Use only the provided story ids.`,
     };
   };
 }
+
+
+export interface TriagedEmailResult {
+  approved: boolean;
+  reason: string;
+  story?: ExtractedStory;
+  article?: {
+    title: string;
+    contentText: string;
+  };
+}
+
+export async function triageFailedEmail(input: {
+  subject: string;
+  sender: string;
+  text: string;
+  errorMessage?: string | null;
+}): Promise<TriagedEmailResult> {
+  const contentExcerpt = (input.text || "").slice(0, 10000);
+
+  const raw = await generateJson(
+    `${SYSTEM_GUARD}
+
+You are the Chief Editorial Triager for SignalOS.
+This email previously encountered an issue or is in the failed queue.
+Your task: Review the content below and make a definitive binary editorial decision: APPROVE or IGNORE.
+Under NO condition should this email be left in an uncertain or failed state.
+
+CRITERIA:
+1. APPROVE ("approved": true):
+   - The email contains real, valuable newsletter content, technical news, AI research, engineering insights, coding tutorials, or startup news that an ambitious tech student will benefit from reading.
+   - You MUST extract a clean title, 2-3 sentence summary, category, keyPoints, and whyItMatters for the student.
+
+2. IGNORE ("approved": false):
+   - The email is transactional noise (OTP, password reset, login verification, invoice, receipt, promotional discount code, marketing spam) OR corrupt, unreadable text.
+   - Provide a clear, precise explanation in "reason" (e.g. "Transactional verification code with no technical substance").
+
+Subject: ${input.subject}
+Sender: ${input.sender}
+Previous Error Context: ${input.errorMessage || "None"}
+Raw Content:
+${contentExcerpt}
+
+Return valid JSON with this schema:
+{
+  "approved": boolean,
+  "reason": "Explicit justification of decision",
+  "title": "Clean concise article title",
+  "summary": "2-3 sentences summarizing the technical development",
+  "whyItMatters": "Why this is essential reading for an ambitious student/builder",
+  "category": "ai-research",
+  "keyPoints": ["bullet point 1", "bullet point 2"],
+  "entities": ["entity 1", "entity 2"],
+  "novelty": 0.8
+}`,
+  );
+
+  const obj = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, any>;
+  const approved = Boolean(obj.approved);
+  const reason = String(obj.reason || (approved ? "Approved by AI triage as high-signal content" : "Triaged as low-signal / transactional"));
+
+  if (!approved) {
+    return { approved: false, reason };
+  }
+
+  const rawCategory = String(obj.category || "other").toLowerCase();
+  const validCategory = (STORY_CATEGORIES as readonly string[]).includes(rawCategory)
+    ? (rawCategory as (typeof STORY_CATEGORIES)[number])
+    : "other";
+
+  const story: ExtractedStory = {
+    title: String(obj.title || input.subject || "Newsletter Intelligence"),
+    summary: String(obj.summary || contentExcerpt.slice(0, 300)),
+    whyItMatters: String(obj.whyItMatters || "Valuable insight for student developers and tech builders."),
+    category: validCategory,
+    keyPoints: Array.isArray(obj.keyPoints) ? obj.keyPoints.map(String) : [],
+    entities: Array.isArray(obj.entities) ? obj.entities.map(String) : [],
+    novelty: typeof obj.novelty === "number" && !isNaN(obj.novelty) ? Math.max(0, Math.min(1, obj.novelty)) : 0.6,
+    sourceClaims: [],
+  };
+
+  return {
+    approved: true,
+    reason,
+    story,
+    article: {
+      title: story.title,
+      contentText: contentExcerpt,
+    },
+  };
+}
+
+export interface HistoricalMatchResult {
+  isContinuationOfId: string | null;
+  relatedStoryIds: string[];
+  updateNote: string | null;
+  milestone: {
+    date: string;
+    label: string;
+    context: string;
+  } | null;
+}
+
+export async function matchHistoricalContext(
+  candidate: {
+    title: string;
+    summary: string;
+    category?: string | null;
+    entities?: string[];
+  },
+  historicalStories: Array<{
+    id: string;
+    canonical_title: string;
+    summary: string | null;
+    category: string | null;
+    entities: string[] | null;
+    first_seen_at: string;
+  }>,
+): Promise<HistoricalMatchResult> {
+  if (historicalStories.length === 0) {
+    return {
+      isContinuationOfId: null,
+      relatedStoryIds: [],
+      updateNote: null,
+      milestone: null,
+    };
+  }
+
+  const catalog = historicalStories.slice(0, 60).map((s) => ({
+    id: s.id,
+    title: s.canonical_title,
+    summary: (s.summary || "").slice(0, 200),
+    category: s.category,
+    date: s.first_seen_at?.slice(0, 10),
+  }));
+
+  const raw = await generateJson(
+    `${SYSTEM_GUARD}
+
+You are the Historical Continuity Intelligence Engine for SignalOS.
+Analyze whether the new candidate story is connected across time to any previous story from the past days, weeks, or months.
+
+SCENARIOS:
+1. DIRECT CONTINUATION / UPDATE:
+   - Today's incident is the sequel, investigation outcome, patch, legal development, or new phase of an earlier event (e.g. CrowdStrike outage follow-up, breach post-mortem, FTC antitrust hearing ruling).
+   - Set "isContinuationOfId" to that specific historical story's ID.
+   - Provide "updateNote" explaining what changed today compared to earlier.
+   - Provide "milestone" with a concise event headline and context.
+
+2. RELATED HISTORICAL PRECEDENT:
+   - Today's story is independent, but strongly related (same technology paradigm, rival response, repeated incident pattern, or direct competitor announcement).
+   - Include the IDs of up to 3 relevant historical stories in "relatedStoryIds".
+   - Provide a brief note in "updateNote" explaining how they relate.
+
+3. COMPLETELY UNRELATED:
+   - If this is a standalone topic with no meaningful historical link in the catalog, return nulls and empty arrays.
+
+Candidate Story:
+Title: ${candidate.title}
+Summary: ${candidate.summary}
+Category: ${candidate.category || "tech"}
+
+Historical Story Catalog:
+${JSON.stringify(catalog, null, 2)}
+
+Return valid JSON with this exact schema:
+{
+  "isContinuationOfId": string | null,
+  "relatedStoryIds": string[],
+  "updateNote": string | null,
+  "milestone": {
+    "label": string,
+    "context": string
+  } | null
+}`,
+  );
+
+  const obj = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, any>;
+  const validIds = new Set(historicalStories.map((s) => s.id));
+
+  const continuationId =
+    typeof obj.isContinuationOfId === "string" && validIds.has(obj.isContinuationOfId)
+      ? obj.isContinuationOfId
+      : null;
+
+  const related = Array.isArray(obj.relatedStoryIds)
+    ? obj.relatedStoryIds.filter(
+        (id: any) => typeof id === "string" && validIds.has(id) && id !== continuationId,
+      )
+    : [];
+
+  return {
+    isContinuationOfId: continuationId,
+    relatedStoryIds: related,
+    updateNote: obj.updateNote ? String(obj.updateNote) : null,
+    milestone:
+      obj.milestone && typeof obj.milestone === "object"
+        ? {
+            date: new Date().toISOString().slice(0, 10),
+            label: String(obj.milestone.label || "Story Update"),
+            context: String(obj.milestone.context || ""),
+          }
+        : null,
+  };
+}

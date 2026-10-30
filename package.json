@@ -16,6 +16,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "worker:sync": "npm run sync -w @signalos/worker",
     "worker:process": "npm run process -w @signalos/worker",
+    "worker:triage": "npm run triage -w @signalos/worker",
     "worker:briefing": "npm run briefing -w @signalos/worker",
     "worker:backfill": "npm run backfill -w @signalos/worker",
     "worker:run": "npm run run -w @signalos/worker"
