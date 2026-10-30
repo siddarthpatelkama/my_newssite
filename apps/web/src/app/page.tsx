@@ -16,7 +16,7 @@ export default async function HomePage() {
   const remaining = stories.filter((story) => story.id !== lead?.id);
 
   return (
-    <DefaultShell>
+    <DefaultShell themeSpec={briefing.themeSpec}>
       <main>
         <EditionHeader
           date={briefing.editionDate}
@@ -75,7 +75,7 @@ export default async function HomePage() {
 
         {/* Real User Taste Rating Slider at the end of the page */}
         <div className="mt-16">
-          <UiTasteRatingBar currentTheme="kyoto-sand" />
+          <UiTasteRatingBar currentTheme={briefing.themeSpec?.themeName || "Kyoto Sand"} />
         </div>
       </main>
     </DefaultShell>

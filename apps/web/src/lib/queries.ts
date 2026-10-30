@@ -1,3 +1,4 @@
+import type { ThemeSpec } from "@signalos/shared";
 import { demoBriefing, demoMode, demoStories } from "./demo";
 import { createAdminSupabase } from "./supabase/admin";
 
@@ -134,7 +135,7 @@ export async function getStory(id: string) {
 }
 
 export async function getBriefing(stories: StoryRecord[]) {
-  if (demoMode) return demoBriefing;
+  if (demoMode) return { ...demoBriefing, themeSpec: null as ThemeSpec | null };
   const supabase = createAdminSupabase();
   const emptyBriefing = () => ({
     editionDate: new Date().toISOString().slice(0, 10),
@@ -146,6 +147,7 @@ export async function getBriefing(stories: StoryRecord[]) {
     sections: stories.length
       ? [{ type: "top_stories" as const, title: "From your newsletters", storyIds: stories.slice(0, 6).map((story) => story.id) }]
       : [],
+    themeSpec: null as ThemeSpec | null,
   });
 
   if (!supabase) return emptyBriefing();
@@ -165,7 +167,7 @@ export async function getBriefing(stories: StoryRecord[]) {
 
   if (!data) return emptyBriefing();
 
-  const configRow = data.dashboard_configs as { config?: typeof demoBriefing } | { config?: typeof demoBriefing }[] | null;
+  const configRow = data.dashboard_configs as { config?: (typeof demoBriefing & { themeSpec?: ThemeSpec }) } | { config?: (typeof demoBriefing & { themeSpec?: ThemeSpec }) }[] | null;
   const config = Array.isArray(configRow) ? configRow[0]?.config : configRow?.config;
 
   return {
@@ -176,5 +178,6 @@ export async function getBriefing(stories: StoryRecord[]) {
     sections:
       (config as typeof demoBriefing | undefined)?.sections ??
       (data.sections as typeof demoBriefing.sections),
+    themeSpec: config?.themeSpec ?? null,
   };
 }

@@ -115,3 +115,17 @@ body {
 .animate-diwali-ember-3 {
   animation: diwaliEmber 12s ease-in-out infinite 5s;
 }
+
+/* Cyber Matrix Grid Atmosphere */
+.cyber-grid-bg {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(34, 197, 94, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(34, 197, 94, 0.05) 1px, transparent 1px);
+}
+
+/* Subtle Sand Grain Texture */
+.sand-grain-bg {
+  background-image: radial-gradient(rgba(140, 75, 45, 0.04) 1px, transparent 0);
+  background-size: 24px 24px;
+}

@@ -63,6 +63,13 @@ export async function generateDailyBriefing(date = new Date()) {
 
   if (hasGeminiKey()) {
     try {
+      // Query recent user taste feedback to inform adaptive UI theming
+      const { data: tasteRatings } = await supabase
+        .from("ui_taste_feedback")
+        .select("theme_id, score, sentiment")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
       const generated = await withJobSpan(
         "gemini.generate_daily_briefing",
         { "gen_ai.operation.name": "generate_daily_briefing" },
@@ -74,6 +81,10 @@ export async function generateDailyBriefing(date = new Date()) {
               summary: story.summary ?? "",
               category: story.category,
             })),
+            {
+              editionDate: edition,
+              tasteRatings: (tasteRatings as Array<{ theme_id: string; score: number; sentiment: string }>) ?? [],
+            },
           ),
       );
 
@@ -95,6 +106,7 @@ export async function generateDailyBriefing(date = new Date()) {
         edition,
         layout: validLayout,
         sections: validSections.length > 0 ? validSections : fallbackConfig(edition, stories).sections,
+        themeSpec: generated?.themeSpec,
       });
       if (parsed.success) config = parsed.data;
       title = generated.title || title;

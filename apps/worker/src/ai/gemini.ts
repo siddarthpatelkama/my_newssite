@@ -344,14 +344,38 @@ Return JSON: { "match": string | null }`,
   return parsed && existing.includes(parsed) ? parsed : null;
 }
 
-export async function writeBriefing(stories: Array<{ id: string; title: string; summary: string; category: string | null }>) {
+export async function writeBriefing(
+  stories: Array<{ id: string; title: string; summary: string; category: string | null }>,
+  options?: {
+    editionDate?: string;
+    tasteRatings?: Array<{ theme_id: string; score: number; sentiment: string }>;
+  },
+) {
+  const dateStr = options?.editionDate || new Date().toISOString().slice(0, 10);
+  const tasteContext = options?.tasteRatings?.length
+    ? `User UI/UX Taste Profile (from rating bar): ${JSON.stringify(options.tasteRatings)}`
+    : `User UI/UX Taste Profile: User strongly likes Kyoto Sand, Swiss Minimalist, and Nordic Slate (warm muted papers, high contrast sumi typography, refined editorial borders). Dislikes noisy clashing neon themes unless justified by major cyber incidents.`;
+
   const raw = await generateJson(
     `${SYSTEM_GUARD}
 
 Write a daily editorial briefing from these curated stories, addressed to an ambitious student and builder in AI and engineering.
-Highlight high-signal takeaways and explain what is worth paying attention to today.
+Date of this edition: ${dateStr}.
+
+${tasteContext}
+
+TASK:
+1. Write high-signal editorial content ("title", "introduction", "sections").
+2. ADAPTIVE GENERATIVE UI DESIGN:
+Synthesize today's adaptive theme ("themeSpec"):
+- Check if today or this week is a cultural festival (e.g. Diwali, Dasara, Holi, New Year) or major tech milestone/conference.
+- If today's top stories are heavily focused on cyberattacks/exploits, apply a subtle stealth cyber aesthetic.
+- If it's Diwali, apply a warm radiant deep-terracotta / golden candlelight diya glow.
+- Otherwise, adapt towards the user's top-rated styles (Kyoto Sand, Swiss Editorial, Nordic Slate).
+- The theme must look gorgeous, professional, high-signal, never cheap or illegible. Contrast between paper and ink must be high and readable.
 
 Stories: ${JSON.stringify(stories)}
+
 Return JSON with this schema:
 {
   "title": string,
@@ -363,7 +387,20 @@ Return JSON with this schema:
       "title": string,
       "storyIds": string[]
     }
-  ]
+  ],
+  "themeSpec": {
+    "themeName": string,
+    "headlineBadge": "e.g. 🪔 Diwali Festival Edition or 🚨 Cyber Threat Watch or Kyoto Minimalist Edition",
+    "reasoning": "1 short sentence explaining why this theme was tailored for today's stories and user taste",
+    "colors": {
+      "paper": "#hex background color (e.g. #ede8df for sand, #0d0a08 for diwali night, #080b10 for cyber)",
+      "ink": "#hex primary text color (must contrast sharply with paper)",
+      "rule": "#hex border/divider color",
+      "crimson": "#hex accent highlight color",
+      "mute": "#hex muted secondary text color"
+    },
+    "atmosphere": "none | god_rays | cyber_grid | diwali_glow | sand_grain"
+  }
 }
 Use only the provided story ids.`,
   );
@@ -372,5 +409,18 @@ Use only the provided story ids.`,
     introduction: string;
     layout: string;
     sections: Array<{ type: string; title: string; storyIds: string[] }>;
+    themeSpec?: {
+      themeName: string;
+      headlineBadge?: string;
+      reasoning?: string;
+      colors: {
+        paper: string;
+        ink: string;
+        rule: string;
+        crimson: string;
+        mute: string;
+      };
+      atmosphere: "none" | "god_rays" | "cyber_grid" | "diwali_glow" | "sand_grain";
+    };
   };
 }
