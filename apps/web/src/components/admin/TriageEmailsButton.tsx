@@ -29,23 +29,43 @@ export function TriageEmailsButton() {
 
   async function handleTriage() {
     setLoading(true);
-    setStatusMessage("Running AI Triage with Gemini across all failed emails...");
+    setStatusMessage("Running AI Triage with Gemini across failed emails...");
+    let totalTriaged = 0;
+    let totalApproved = 0;
+    let totalIgnored = 0;
+
     try {
-      const res = await fetch("/api/admin/triage", { method: "POST" });
-      const json = await res.json();
-      if (json.success) {
+      while (true) {
+        const res = await fetch("/api/admin/triage", { method: "POST" });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Server returned ${res.status}: ${errText.slice(0, 100)}`);
+        }
+        const json = await res.json();
+        if (!json.success) {
+          throw new Error(json.error || "Triage failed");
+        }
+        totalTriaged += json.triaged;
+        totalApproved += json.approved;
+        totalIgnored += json.ignored;
+
         setStatusMessage(
-          `✓ Success: ${json.triaged} emails triaged (${json.approved} approved into newsroom, ${json.ignored} marked as noise). 0 emails left in failed!`
+          `Triaging with AI... Progress: ${totalTriaged} triaged (${totalApproved} approved, ${totalIgnored} ignored). Remaining failed: ${json.remainingFailed}`,
         );
         await loadCounts();
-      } else {
-        setStatusMessage(`Error: ${json.error || "Triage failed"}`);
+
+        if (json.triaged === 0 || json.remainingFailed === 0) break;
       }
+
+      setStatusMessage(
+        `✓ All caught up! Total ${totalTriaged} emails triaged with Gemini: ${totalApproved} approved into newsroom, ${totalIgnored} marked as noise. 0 emails left in failed!`,
+      );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to trigger triage";
       setStatusMessage(`Error: ${msg}`);
     } finally {
       setLoading(false);
+      await loadCounts();
     }
   }
 

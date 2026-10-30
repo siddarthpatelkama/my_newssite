@@ -76,12 +76,12 @@ export async function POST() {
       return NextResponse.json({ error: "Supabase connection unavailable." }, { status: 503 });
     }
 
-    // 1. Fetch all currently failed emails
+    // 1. Fetch failed emails in batches of 10 to comfortably stay within serverless execution limits
     const { data: failedEmails, error: fetchErr } = await supabase
       .from("emails")
       .select("id, subject, body_text, body_html, newsletter_id, error_message, newsletters(sender_name, sender_email)")
       .eq("processing_status", "failed")
-      .limit(100);
+      .limit(10);
 
     if (fetchErr) {
       return NextResponse.json({ error: fetchErr.message }, { status: 500 });
