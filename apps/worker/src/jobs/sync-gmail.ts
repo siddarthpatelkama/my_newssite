@@ -70,13 +70,27 @@ export async function syncGmail(options?: { backfill?: boolean }) {
     state = created;
   }
 
+  // Check if emails table is empty (e.g. freshly wiped database)
+  const { count: emailCount } = await supabase
+    .from("emails")
+    .select("id", { count: "exact", head: true });
+
+  const isDatabaseEmpty = (emailCount ?? 0) === 0;
+  const shouldBackfill = Boolean(options?.backfill || isDatabaseEmpty || !state?.history_id);
+
   let ids: string[] = [];
   let nextHistoryId: string | undefined;
 
-  if (!options?.backfill && state?.history_id) {
+  if (isDatabaseEmpty) {
+    console.log("[Gmail Sync] Emails table is empty. Forcing full inbox scan to populate database...");
+  }
+
+  if (!shouldBackfill && state?.history_id) {
+    console.log(`[Gmail Sync] Checking for new emails since history cursor ${state.history_id}...`);
     const history = await getHistory(state.history_id);
     if (!history.ok) {
       // Reconcile mailbox after Gmail has expired old cursor
+      console.log("[Gmail Sync] History cursor expired. Reconciling mailbox...");
       nextHistoryId = await getCurrentHistoryId();
       ids = await listNewsletterMessageIds(Number.MAX_SAFE_INTEGER);
     } else {
@@ -88,11 +102,14 @@ export async function syncGmail(options?: { backfill?: boolean }) {
         }
       }
       ids = [...added];
+      console.log(`[Gmail Sync] Found ${ids.length} new messages in history.`);
     }
   } else {
-    // If no history_id (new or wiped database), list emails directly
+    // If no history_id, options.backfill, or emails table is empty: fetch inbox directly
+    console.log("[Gmail Sync] Fetching recent messages from inbox...");
     nextHistoryId = await getCurrentHistoryId();
     ids = await listNewsletterMessageIds(options?.backfill ? env.MAX_BACKFILL : env.MAX_EMAILS_PER_SYNC);
+    console.log(`[Gmail Sync] Retrieved ${ids.length} message IDs from mailbox.`);
   }
 
   const newsletterLabelId = await getNewsletterLabelId();
