@@ -18,6 +18,13 @@ const sans = Source_Sans_3({
 export const metadata: Metadata = {
   title: "SignalOS · Daily Intelligence",
   description: "A personal editorial paper generated from your newsletters.",
+  icons: {
+    icon: [
+      { url: "/icon.png" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-icon.png",
+  },
 };
 
 export const dynamic = "force-dynamic";
