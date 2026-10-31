@@ -3,7 +3,16 @@ import { authConfigured, sessionCookieName, verifySessionToken } from "@/lib/aut
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  if (path === "/login" || path === "/api/auth/login" || path === "/api/gmail/callback") {
+  if (
+    path === "/login" ||
+    path === "/api/auth/login" ||
+    path === "/api/gmail/callback" ||
+    path.startsWith("/icon") ||
+    path.startsWith("/apple-icon") ||
+    path === "/favicon.ico" ||
+    path.endsWith(".png") ||
+    path.endsWith(".ico")
+  ) {
     return NextResponse.next();
   }
 
@@ -20,5 +29,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };
