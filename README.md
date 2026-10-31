@@ -1,4 +1,4 @@
-# SignalOS
+#SignalOS
 
 Personal newsletter intelligence: Gmail in, clustered stories out, editorial website in between.
 
