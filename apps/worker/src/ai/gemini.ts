@@ -114,11 +114,11 @@ function getTargetModels(): string[] {
   const configured = env.GEMINI_MODEL?.trim();
   const models: string[] = [];
   // Exclude legacy deprecated models
-  if (configured && !configured.includes("2.0") && !configured.includes("1.5")) {
+  if (configured && !configured.includes("2.0") && !configured.includes("1.5") && !configured.includes("2.5") && !configured.includes("3.8")) {
     models.push(configured);
   }
   // High-capacity models with 1,500 requests/day per key on free tier
-  models.push("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.8-flash");
+  models.push("gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest");
   return [...new Set(models)];
 }
 
@@ -661,12 +661,17 @@ export async function generateStoryEmbedding(text: string): Promise<number[]> {
     const ai = new GoogleGenAI({ apiKey: key });
     console.log(`[Gemini] Generating 768-dim vector embedding with key #${index}/${total} (${masked})...`);
     const response = await ai.models.embedContent({
-      model: "text-embedding-004",
+      model: "gemini-embedding-001",
       contents: text.slice(0, 2048),
+
+      config: {
+        outputDimensionality: 768,
+      },
+
     });
     const values = response.embeddings?.[0]?.values;
-    if (!values || !Array.isArray(values) || values.length === 0) {
-      throw new Error("text-embedding-004 did not return vector values");
+    if (!values || !Array.isArray(values) || values.length !== 768) {
+      throw new Error("gemini-embedding-001 did not return 768 vector values");
     }
     return values;
   } catch (err: unknown) {

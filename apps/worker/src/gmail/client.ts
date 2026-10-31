@@ -110,7 +110,13 @@ export async function getHistory(startHistoryId: string) {
     return { ok: true as const, data: { history, historyId } };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("404") || message.includes("historyId") || message.includes("too old")) {
+    if (
+      message.includes("404") ||
+      message.includes("historyId") ||
+      message.includes("too old") ||
+      message.includes("Requested entity was not found") ||
+      message.includes("not found")
+    ) {
       return { ok: false as const };
     }
     throw error;

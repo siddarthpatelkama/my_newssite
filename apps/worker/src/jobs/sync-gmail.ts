@@ -30,7 +30,21 @@ async function upsertEmail(messageId: string, newsletterLabelId: string | null) 
     .maybeSingle();
   if (existing.data?.id) return { inserted: false };
 
-  const message = await getMessage(messageId);
+  let message;
+  try {
+    message = await getMessage(messageId);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("Requested entity was not found") ||
+      msg.includes("404") ||
+      msg.includes("not found")
+    ) {
+      console.warn(`[Gmail Sync] Message ${messageId} no longer exists in mailbox (e.g. deleted or draft). Skipping.`);
+      return { inserted: false };
+    }
+    throw err;
+  }
   if (newsletterLabelId && !message.labelIds?.includes(newsletterLabelId)) return { inserted: false };
   const headers = headerMap(message);
   const from = parseFrom(headers.get("from"));
@@ -115,8 +129,13 @@ export async function syncGmail(options?: { backfill?: boolean }) {
   const newsletterLabelId = await getNewsletterLabelId();
   let inserted = 0;
   for (const id of ids) {
-    const result = await upsertEmail(id, newsletterLabelId);
-    if (result.inserted) inserted += 1;
+    try {
+      const result = await upsertEmail(id, newsletterLabelId);
+      if (result.inserted) inserted += 1;
+    } catch (singleErr: unknown) {
+      const msg = singleErr instanceof Error ? singleErr.message : String(singleErr);
+      console.warn(`[Gmail Sync] Warning processing message ${id}: ${msg.slice(0, 100)}. Continuing...`);
+    }
   }
 
   const { error: updateError } = await supabase
