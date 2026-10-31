@@ -106,9 +106,9 @@ async function main() {
 
       console.log("\n================ [STEP 1/4: GMAIL SYNC] ================");
       try {
-        sync = await withProcessingJob("gmail_sync", () =>
+        sync = (await withProcessingJob("gmail_sync", () =>
           withJobSpan("worker.gmail_sync", { "job.type": "gmail.sync" }, syncGmail),
-        );
+        )) ?? { scanned: 0, inserted: 0 };
         console.log(`[Worker] Gmail sync completed: ${sync.scanned} scanned, ${sync.inserted} inserted.`);
       } catch (err: any) {
         console.error("[Worker] Warning during Gmail sync:", err?.message || err);
@@ -116,13 +116,13 @@ async function main() {
 
       console.log("\n================ [STEP 2/4: AI TRIAGE FAILED EMAILS] ==");
       try {
-        triage = await withProcessingJob("email_triage", () =>
+        triage = (await withProcessingJob("email_triage", () =>
           withJobSpan(
             "worker.triage_failed_emails",
             { "job.type": "email.triage" },
             () => triageFailedEmails(100),
           ),
-        );
+        )) ?? { triaged: 0, approved: 0, ignored: 0 };
         console.log(`[Worker] AI Triage completed: ${triage.triaged} triaged (${triage.approved} approved, ${triage.ignored} ignored).`);
       } catch (err: any) {
         console.error("[Worker] Warning during AI triage:", err?.message || err);
@@ -130,13 +130,13 @@ async function main() {
 
       console.log("\n================ [STEP 3/4: PROCESS EMAILS] ============");
       try {
-        process = await withProcessingJob("email_process", () =>
+        process = (await withProcessingJob("email_process", () =>
           withJobSpan(
             "worker.process_emails",
             { "job.type": "email.process" },
             processPendingEmails,
           ),
-        );
+        )) ?? { processed: 0 };
         console.log(`[Worker] Email processing completed: ${process.processed} processed.`);
       } catch (err: any) {
         console.error("[Worker] Warning during email processing:", err?.message || err);

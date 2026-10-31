@@ -40,16 +40,33 @@ export async function POST() {
       .order("last_updated_at", { ascending: false })
       .limit(8);
 
-    // 3. Check for Gemini API key
-    const rawKeys = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || "";
-    const apiKey = rawKeys.split(/[\r\n,;]+/)[0]?.trim();
+    // 3. Check for Gemini API keys with multi-key rotation and modern model fallback
+    const rawKeys = [
+      process.env.GEMINI_API_KEYS,
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_1,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const apiKeys = rawKeys
+      .split(/[\r\n,;]+/)
+      .map((k) => k.replace(/["'`;]/g, "").trim())
+      .filter((k) => k.length >= 15);
 
     let evolvedTheme: ThemeSpec | null = null;
 
-    if (apiKey && apiKey.length >= 15) {
-      try {
-        const ai = new GoogleGenAI({ apiKey });
-        const prompt = `You are the lead art director and generative UI designer for SignalOS personal intelligence paper.
+    if (apiKeys.length > 0) {
+      const candidateModels = [
+        "gemini-flash-lite-latest",
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+      ];
+
+      const prompt = `You are the lead art director and generative UI designer for SignalOS personal intelligence paper.
 Date: ${new Date().toISOString().slice(0, 10)}.
 
 User's UI/UX Taste Profile (From Rating Bar):
@@ -85,20 +102,33 @@ Return JSON only:
   "layoutStyle": "string"
 }`;
 
-        const res = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-          config: {
-            temperature: 0.3,
-            responseMimeType: "application/json",
-          },
-        });
+      for (const key of apiKeys) {
+        if (evolvedTheme) break;
+        const ai = new GoogleGenAI({ apiKey: key });
 
-        if (res.text) {
-          evolvedTheme = JSON.parse(res.text) as ThemeSpec;
+        for (const model of candidateModels) {
+          try {
+            const res = await ai.models.generateContent({
+              model,
+              contents: prompt,
+              config: {
+                temperature: 0.3,
+                responseMimeType: "application/json",
+              },
+            });
+
+            if (res.text) {
+              evolvedTheme = JSON.parse(res.text) as ThemeSpec;
+              break;
+            }
+          } catch (modelErr: unknown) {
+            const msg = modelErr instanceof Error ? modelErr.message : String(modelErr);
+            console.warn(`[Theme Evolve] Key failed on ${model}: ${msg.slice(0, 80)}`);
+            if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
+              break; // rotate to next key
+            }
+          }
         }
-      } catch (geminiErr) {
-        console.warn("[Theme Evolve] Gemini call error, falling back to local synthesis:", geminiErr);
       }
     }
 

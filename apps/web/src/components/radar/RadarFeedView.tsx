@@ -6,16 +6,31 @@ import type { RadarItem } from "@/lib/radar";
 export function RadarFeedView({ initialItems }: { initialItems: RadarItem[] }) {
   const [items, setItems] = useState<RadarItem[]>(initialItems);
   const [filter, setFilter] = useState<string>("all");
-  const [feedbacks, setFeedbacks] = useState<Record<string, "like" | "dislike" | "save">>({});
+  const [feedbacks, setFeedbacks] = useState<Record<string, "like" | "dislike" | "save">>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("signalos_radar_feedbacks");
+        return stored ? JSON.parse(stored) : {};
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  });
   const [customUrl, setCustomUrl] = useState("");
   const [addingFeed, setAddingFeed] = useState(false);
   const [feedMessage, setFeedMessage] = useState<string | null>(null);
 
   const handleFeedback = async (item: RadarItem, action: "like" | "dislike" | "save") => {
-    setFeedbacks((prev) => ({ ...prev, [item.id]: action }));
+    const previous = feedbacks[item.id];
+    const next = { ...feedbacks, [item.id]: action };
+    setFeedbacks(next);
+    try {
+      localStorage.setItem("signalos_radar_feedbacks", JSON.stringify(next));
+    } catch {}
 
     try {
-      await fetch("/api/radar/feedback", {
+      const res = await fetch("/api/radar/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -26,8 +41,20 @@ export function RadarFeedView({ initialItems }: { initialItems: RadarItem[] }) {
           category: item.category,
         }),
       });
+      if (!res.ok) {
+        throw new Error("Server rejected feedback");
+      }
     } catch (err) {
-      console.error("Failed to send radar feedback:", err);
+      console.warn("Failed to persist radar feedback, reverting:", err);
+      setFeedbacks((prev) => {
+        const reverted = { ...prev };
+        if (previous) reverted[item.id] = previous;
+        else delete reverted[item.id];
+        try {
+          localStorage.setItem("signalos_radar_feedbacks", JSON.stringify(reverted));
+        } catch {}
+        return reverted;
+      });
     }
   };
 

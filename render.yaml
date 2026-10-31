@@ -44,7 +44,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-3.8-flash
+        value: gemini-flash-lite-latest
       - key: MAX_AI_RETRIES
         value: "3"
   - type: cron
@@ -63,4 +63,4 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-3.8-flash
+        value: gemini-flash-lite-latest

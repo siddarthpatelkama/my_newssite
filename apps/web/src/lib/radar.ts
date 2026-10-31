@@ -145,14 +145,67 @@ export async function fetchRadarItems(): Promise<RadarItem[]> {
   return deduped;
 }
 
+function validateRadarUrl(rawUrl: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error("Invalid URL format");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Only HTTP and HTTPS URLs are permitted");
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "0.0.0.0" ||
+    host === "::1" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".lan") ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    host.startsWith("169.254.") || // AWS/GCP/Azure instance metadata
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) // 172.16.0.0 - 172.31.255.255
+  ) {
+    throw new Error("Access to local and private network addresses is forbidden");
+  }
+
+  return parsed;
+}
+
 export async function fetchCustomFeed(feedUrl: string, customName?: string): Promise<RadarItem[]> {
-  const res = await fetch(feedUrl, {
-    headers: {
-      "User-Agent": "SignalOS-Radar/1.0 (Personal Research Engine)",
-    },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch feed: HTTP ${res.status}`);
-  const xml = await res.text();
-  const sourceName = customName || new URL(feedUrl).hostname.replace("www.", "");
-  return parseFeedXml(xml, sourceName, "custom", `🌐 ${sourceName}`);
+  const validated = validateRadarUrl(feedUrl);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const res = await fetch(validated.toString(), {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "SignalOS-Radar/1.0 (Personal Research Engine)",
+        Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
+      },
+    });
+
+    if (!res.ok) throw new Error(`Failed to fetch feed: HTTP ${res.status}`);
+
+    const contentLength = res.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 2 * 1024 * 1024) {
+      throw new Error("Feed payload exceeds maximum allowed size (2MB)");
+    }
+
+    const xml = await res.text();
+    if (xml.length > 2 * 1024 * 1024) {
+      throw new Error("Feed payload exceeds maximum allowed size (2MB)");
+    }
+
+    const sourceName = customName || validated.hostname.replace("www.", "");
+    return parseFeedXml(xml, sourceName, "custom", `🌐 ${sourceName}`);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

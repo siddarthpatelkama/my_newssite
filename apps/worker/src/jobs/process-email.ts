@@ -207,16 +207,37 @@ export async function triageFailedEmails(limit = 100) {
           .eq("id", email.id);
         ignoredCount += 1;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(`[triageFailedEmails] Triage error for "${email.subject}":`, err);
-      // Guarantee: Under NO condition does this email remain in 'failed'
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTransient =
+        msg.includes("429") ||
+        msg.includes("503") ||
+        msg.includes("quota") ||
+        msg.includes("RESOURCE_EXHAUSTED") ||
+        msg.includes("fetch failed") ||
+        msg.includes("timeout") ||
+        msg.includes("high demand");
+
+      if (isTransient && (email.processing_attempts ?? 0) < 5) {
+        await supabase
+          .from("emails")
+          .update({
+            processing_status: "pending",
+            processing_started_at: null,
+            next_retry_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+            error_message: `Transient triage error (will retry): ${msg.slice(0, 300)}`,
+          })
+          .eq("id", email.id);
+        return;
+      }
       await supabase
         .from("emails")
         .update({
           processing_status: "ignored",
           processing_started_at: null,
           next_retry_at: null,
-          error_message: `AI Triage Exception: ${String(err?.message || err).slice(0, 500)}`,
+          error_message: `AI Triage Exception: ${msg.slice(0, 500)}`,
           body_html: null,
           body_text: null,
         })
@@ -622,6 +643,25 @@ async function processOneEmail(email: {
         }
       } catch (triageFallbackErr) {
         console.error(`[Worker] AI triage fallback exception for "${email.subject}":`, triageFallbackErr);
+        const triageMsg = triageFallbackErr instanceof Error ? triageFallbackErr.message : String(triageFallbackErr);
+        const isTransient =
+          triageMsg.includes("429") ||
+          triageMsg.includes("503") ||
+          triageMsg.includes("quota") ||
+          triageMsg.includes("RESOURCE_EXHAUSTED") ||
+          triageMsg.includes("fetch failed") ||
+          triageMsg.includes("timeout") ||
+          triageMsg.includes("high demand");
+
+        if (isTransient && (email.processing_attempts ?? 0) < 5) {
+          await supabase.from("emails").update({
+            processing_status: "pending",
+            processing_started_at: null,
+            next_retry_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+            error_message: `Transient triage fallback error (will retry): ${triageMsg.slice(0, 300)}`,
+          }).eq("id", email.id);
+          return;
+        }
       }
     }
 
