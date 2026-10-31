@@ -78,9 +78,24 @@ ${JSON.stringify((stories || []).map((s) => ({ title: s.canonical_title, categor
 
 TASK:
 Synthesize an evolved themeSpec that respects the user's top-rated aesthetics and design keywords, adapting to today's date and headlines.
-- If today or this week coincides with a major festival (e.g. Diwali, Dasara, New Year), infuse that festival's aura.
-- If today's top stories are heavily focused on cybersecurity or exploits, adapt towards a subtle stealth terminal cyber aesthetic.
-- Otherwise, evolve towards the user's favorite styles (e.g. Kyoto Sand, Swiss Minimalist, Nordic Slate). High contrast, gorgeous typography, and legible palette are strictly mandatory.
+- If the user's top-rated styles are 'Neural Sumi Grid', 'Sumi Cyber Broadsheet', or dark/cyber aesthetics:
+  * Generate a distinct, sleek dark Sumi/Cyber theme:
+    paper: "#0e1117" or "#12141a"
+    ink: "#f0f6fc"
+    rule: "#30363d"
+    crimson: "#38bdf8" (cyan highlight) or "#f43f5e" (neon rose)
+    mute: "#8b949e"
+    atmosphere: "cyber_grid"
+- If the user's top-rated styles are 'Kyoto Sand' or warm paper:
+  * Generate a warm tactile organic washi paper aesthetic:
+    paper: "#ede8df" or "#f5eee2"
+    ink: "#242220"
+    rule: "#d8d1c5"
+    crimson: "#8c4b2d"
+    mute: "#756f66"
+    atmosphere: "sand_grain"
+- If today coincides with a festival (e.g. Diwali), adapt towards warm festive gold/ember glow (atmosphere: "diwali_glow").
+- High contrast, gorgeous typography, and legible palette are strictly mandatory.
 
 Return JSON only:
 {
@@ -88,7 +103,7 @@ Return JSON only:
   "headlineBadge": string,
   "reasoning": string,
   "colors": {
-    "paper": "#hex background (e.g. #ede8df)",
+    "paper": "#hex background",
     "ink": "#hex primary text (high contrast)",
     "rule": "#hex border lines",
     "crimson": "#hex accent highlight",
