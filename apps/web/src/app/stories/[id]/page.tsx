@@ -6,6 +6,8 @@ import { StoryTimeline } from "@/components/editorial/StoryTimeline";
 import { StoryFeedback } from "@/components/telemetry/StoryFeedback";
 import { getStories, getStory } from "@/lib/queries";
 
+export const dynamic = "force-dynamic";
+
 export default async function StoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const story = await getStory(id);

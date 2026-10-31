@@ -4,6 +4,8 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { EvolveThemeButton } from "@/components/theme/EvolveThemeButton";
 import { TriageEmailsButton } from "@/components/admin/TriageEmailsButton";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ gmail?: string }> }) {
   const { gmail } = await searchParams;
   const telemetry = await getTelemetrySummary();

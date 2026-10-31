@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { GoogleGenAI } from "@google/genai";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { ThemeSpec } from "@signalos/shared";
@@ -185,6 +186,9 @@ Return JSON only:
         },
         { onConflict: "briefing_id" },
       );
+
+      // Invalidate full Next.js cache so the newly evolved theme applies immediately to all pages
+      revalidatePath("/", "layout");
     }
 
     return NextResponse.json({

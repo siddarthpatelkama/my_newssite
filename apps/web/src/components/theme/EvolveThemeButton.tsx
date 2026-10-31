@@ -19,8 +19,8 @@ export function EvolveThemeButton() {
         setStatus(`✓ Evolved to "${data.evolvedTheme?.themeName}"! Applying to paper...`);
         setTimeout(() => {
           router.refresh();
-          window.location.href = "/";
-        }, 1200);
+          window.location.reload();
+        }, 800);
       } else {
         setStatus("Could not evolve theme: " + (data.error || "Unknown error"));
         setLoading(false);

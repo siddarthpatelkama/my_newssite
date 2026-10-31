@@ -2,6 +2,8 @@ import { DefaultShell } from "@/components/layout/DefaultShell";
 import { StoryCard } from "@/components/editorial/StoryCard";
 import { getStories } from "@/lib/queries";
 
+export const dynamic = "force-dynamic";
+
 export default async function SearchPage({
   searchParams,
 }: {

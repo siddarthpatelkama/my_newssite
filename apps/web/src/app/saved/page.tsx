@@ -1,5 +1,7 @@
 import { DefaultShell } from "@/components/layout/DefaultShell";
 
+export const dynamic = "force-dynamic";
+
 export default function SavedPage() {
   return (
     <DefaultShell>
