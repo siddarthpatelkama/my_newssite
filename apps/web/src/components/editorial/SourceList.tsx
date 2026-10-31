@@ -13,7 +13,12 @@ export function SourceList({ sources }: { sources: StoryRecord["sources"] }) {
               {source.newsletterName ?? source.sourceName ?? "Newsletter"}
             </p>
             {source.canonicalUrl ? (
-              <a href={source.canonicalUrl} className="text-sm text-crimson underline-offset-2 hover:underline">
+              <a
+                href={source.canonicalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-crimson underline-offset-2 hover:underline"
+              >
                 {source.canonicalUrl}
               </a>
             ) : null}

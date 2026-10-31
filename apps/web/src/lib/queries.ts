@@ -346,17 +346,18 @@ export async function getBriefing(stories: StoryRecord[]) {
   const { data, error } = await supabase
     .from("daily_briefings")
     .select("edition_date, title, introduction, sections, dashboard_configs(config)")
-    .eq("status", "published")
     .order("edition_date", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (error) {
-    console.error("Unable to load the published briefing from Supabase:", error.message);
-    return emptyBriefing();
-  }
+  const activeTheme = await getActiveThemeSpec();
 
-  if (!data) return emptyBriefing();
+  if (error || !data) {
+    return {
+      ...emptyBriefing(),
+      themeSpec: activeTheme,
+    };
+  }
 
   const configRow = data.dashboard_configs as { config?: (typeof demoBriefing & { themeSpec?: ThemeSpec }) } | { config?: (typeof demoBriefing & { themeSpec?: ThemeSpec }) }[] | null;
   const config = Array.isArray(configRow) ? configRow[0]?.config : configRow?.config;
@@ -369,11 +370,72 @@ export async function getBriefing(stories: StoryRecord[]) {
     sections:
       (config as typeof demoBriefing | undefined)?.sections ??
       (data.sections as typeof demoBriefing.sections),
-    themeSpec: config?.themeSpec ?? null,
+    themeSpec: config?.themeSpec ?? activeTheme,
   };
 }
 
 export async function getActiveThemeSpec(): Promise<ThemeSpec | null> {
-  const briefing = await getBriefing([]);
-  return briefing.themeSpec ?? null;
+  const supabase = createAdminSupabase();
+  if (!supabase) return null;
+
+  try {
+    // 1. Check latest briefing dashboard_configs
+    const { data: briefingRow } = await supabase
+      .from("daily_briefings")
+      .select("dashboard_configs(config)")
+      .order("edition_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const configRow = briefingRow?.dashboard_configs as { config?: { themeSpec?: ThemeSpec } } | { config?: { themeSpec?: ThemeSpec } }[] | null;
+    const config = Array.isArray(configRow) ? configRow[0]?.config : configRow?.config;
+    if (config?.themeSpec) {
+      return config.themeSpec;
+    }
+
+    // 2. Direct dashboard_configs table check
+    const { data: directConfig } = await supabase
+      .from("dashboard_configs")
+      .select("config")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const directCfg = directConfig?.config as { themeSpec?: ThemeSpec } | null;
+    if (directCfg?.themeSpec) {
+      return directCfg.themeSpec;
+    }
+
+    // 3. Fallback to latest taste feedback record containing full theme definition
+    const { data: latestTaste } = await supabase
+      .from("ui_taste_feedback")
+      .select("theme_id, notes, sentiment, score")
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (latestTaste) {
+      for (const t of latestTaste) {
+        if (t.notes && t.notes.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(t.notes);
+            if (parsed.colors && parsed.themeName) {
+              return {
+                themeName: parsed.themeName,
+                headlineBadge: parsed.headlineBadge || `${parsed.themeName} · Active Edition`,
+                reasoning: parsed.reasoning || "Applied from your generative design taste profile.",
+                colors: parsed.colors,
+                typography: parsed.typography || { headline: "Georgia, serif", body: "system-ui, sans-serif" },
+                atmosphere: parsed.atmosphere || "sand_grain",
+                keywords: parsed.keywords || [],
+                layoutStyle: parsed.layoutStyle || "Editorial Broadsheet",
+              };
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Unable to load active theme spec:", err);
+  }
+
+  return null;
 }

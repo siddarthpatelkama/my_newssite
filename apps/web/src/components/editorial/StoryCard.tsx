@@ -8,7 +8,7 @@ export function StoryCard({ story, kicker }: { story: StoryRecord; kicker?: stri
         {kicker ?? story.category?.replace("-", " ")}
       </p>
       <h3 className="mt-2 font-serif text-2xl leading-snug">
-        <Link href={`/stories/${story.id}`} className="hover:text-crimson">
+        <Link href={`/stories/${story.id}`} target="_blank" className="hover:text-crimson">
           {story.canonicalTitle}
         </Link>
       </h3>

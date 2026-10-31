@@ -88,6 +88,7 @@ export function StoryTimeline({ timeline, relatedHistoricalStories }: StoryTimel
                     <div className="mt-3 inline-block">
                       <Link
                         href={`/stories/${milestone.relatedStoryId}`}
+                        target="_blank"
                         className="inline-flex items-center gap-1.5 rounded border border-rule bg-paper px-3 py-1 text-xs font-medium text-ink transition hover:border-crimson hover:text-crimson"
                       >
                         <span>← Read historical context:</span>
@@ -114,6 +115,7 @@ export function StoryTimeline({ timeline, relatedHistoricalStories }: StoryTimel
               <Link
                 key={rel.id}
                 href={`/stories/${rel.id}`}
+                target="_blank"
                 className="group flex flex-col justify-between rounded border border-rule/80 bg-paper/80 p-4 transition hover:border-crimson hover:shadow-sm"
               >
                 <div>
@@ -142,4 +144,3 @@ export function StoryTimeline({ timeline, relatedHistoricalStories }: StoryTimel
     </section>
   );
 }
-

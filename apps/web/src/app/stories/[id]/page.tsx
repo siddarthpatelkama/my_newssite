@@ -54,16 +54,16 @@ export default async function StoryPage({ params }: { params: Promise<{ id: stri
         />
         <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-rule pt-6 text-xs uppercase tracking-[0.2em] text-mute">
           {prevStory ? (
-            <Link href={`/stories/${prevStory.id}`} className="hover:text-crimson">
+            <Link href={`/stories/${prevStory.id}`} target="_blank" className="hover:text-crimson">
               ← Previous: {prevStory.canonicalTitle.slice(0, 24)}…
             </Link>
           ) : (
-            <Link href="/" className="hover:text-crimson">
+            <Link href="/" target="_blank" className="hover:text-crimson">
               ← Back to edition
             </Link>
           )}
           {nextStory ? (
-            <Link href={`/stories/${nextStory.id}`} className="hover:text-crimson">
+            <Link href={`/stories/${nextStory.id}`} target="_blank" className="hover:text-crimson">
               Next: {nextStory.canonicalTitle.slice(0, 24)}… →
             </Link>
           ) : null}

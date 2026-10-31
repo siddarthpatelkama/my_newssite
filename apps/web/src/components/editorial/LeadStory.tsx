@@ -9,7 +9,9 @@ export function LeadStory({ story }: { story: StoryRecord }) {
           Top story · {story.category?.replace("-", " ")}
         </p>
         <h2 className="mt-3 font-serif text-4xl leading-[1.15] sm:text-6xl">
-          <Link href={`/stories/${story.id}`}>{story.canonicalTitle}</Link>
+          <Link href={`/stories/${story.id}`} target="_blank">
+            {story.canonicalTitle}
+          </Link>
         </h2>
         <p className="mt-6 max-w-2xl font-serif text-xl leading-8 text-ink/80">{story.summary}</p>
       </div>
@@ -25,7 +27,11 @@ export function LeadStory({ story }: { story: StoryRecord }) {
             </li>
           ))}
         </ul>
-        <Link href={`/stories/${story.id}`} className="mt-6 inline-block text-xs uppercase tracking-[0.2em] text-crimson">
+        <Link
+          href={`/stories/${story.id}`}
+          target="_blank"
+          className="mt-6 inline-block text-xs uppercase tracking-[0.2em] text-crimson"
+        >
           Continue with sources →
         </Link>
       </div>

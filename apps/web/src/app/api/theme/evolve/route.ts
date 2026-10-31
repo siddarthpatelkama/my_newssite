@@ -181,11 +181,27 @@ Return JSON only:
       .limit(1)
       .maybeSingle();
 
-    if (latestBriefing?.id) {
+    let briefingId = latestBriefing?.id;
+    if (!briefingId) {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: createdBriefing } = await supabase
+        .from("daily_briefings")
+        .insert({
+          edition_date: today,
+          title: "SignalOS · " + today,
+          status: "published",
+          sections: [],
+        })
+        .select("id")
+        .maybeSingle();
+      briefingId = createdBriefing?.id;
+    }
+
+    if (briefingId) {
       const { data: currentConfigRow } = await supabase
         .from("dashboard_configs")
         .select("config")
-        .eq("briefing_id", latestBriefing.id)
+        .eq("briefing_id", briefingId)
         .maybeSingle();
 
       const existingConfig = currentConfigRow?.config || {};
@@ -196,15 +212,23 @@ Return JSON only:
 
       await supabase.from("dashboard_configs").upsert(
         {
-          briefing_id: latestBriefing.id,
+          briefing_id: briefingId,
           config: updatedConfig,
         },
         { onConflict: "briefing_id" },
       );
-
-      // Invalidate full Next.js cache so the newly evolved theme applies immediately to all pages
-      revalidatePath("/", "layout");
     }
+
+    // 5. Also log this evolved theme into ui_taste_feedback so it remains in the user's recorded tastes
+    await supabase.from("ui_taste_feedback").insert({
+      theme_id: evolvedTheme.themeName,
+      score: 100,
+      sentiment: "like",
+      notes: JSON.stringify(evolvedTheme),
+    });
+
+    // Invalidate full Next.js cache so the newly evolved theme applies immediately to all pages
+    revalidatePath("/", "layout");
 
     return NextResponse.json({
       success: true,
