@@ -1,6 +1,7 @@
 import type { ThemeSpec } from "@signalos/shared";
 import { demoBriefing, demoMode, demoStories } from "./demo";
 import { createAdminSupabase } from "./supabase/admin";
+import { fetchOrGenerateMatterTimeline } from "./matter-history";
 
 export type StoryRecord = {
   id: string;
@@ -61,6 +62,7 @@ type StoryRow = {
   first_seen_at: string;
   last_updated_at: string;
   related_story_ids?: string[] | null;
+  timeline?: StoryMilestone[] | null;
   story_sources: Array<{
     article_id: string;
     articles: {
@@ -208,13 +210,13 @@ export async function getStory(id: string): Promise<StoryDetailRecord | null> {
   const directRes = await supabase
     .from("stories")
     .select(
-      "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, related_story_ids, story_sources(article_id, articles(id, title, canonical_url, source_name))",
+      "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, related_story_ids, timeline, story_sources(article_id, articles(id, title, canonical_url, source_name))",
     )
     .eq("id", id)
     .maybeSingle();
 
   if (directRes.error) {
-    // If table lacks related_story_ids column yet, fallback to basic select
+    // If table lacks related_story_ids or timeline column yet, fallback to basic select
     const fallbackRes = await supabase
       .from("stories")
       .select(
@@ -278,26 +280,11 @@ export async function getStory(id: string): Promise<StoryDetailRecord | null> {
     relatedStoryId: null as string | null,
   }));
 
-  // 3. Collect historical related stories
+  // 3. Collect genuine historical related stories (only if explicitly linked by sequel ID)
   const relatedIds = new Set<string>();
   if (Array.isArray(storyRow.related_story_ids)) {
     for (const rid of storyRow.related_story_ids) {
       if (typeof rid === "string" && rid !== id) relatedIds.add(rid);
-    }
-  }
-
-  // Also query other stories that share common key entities
-  if (relatedIds.size < 3 && storyRow.entities && storyRow.entities.length > 0) {
-    const { data: entityMatches } = await supabase
-      .from("stories")
-      .select("id")
-      .neq("id", id)
-      .overlaps("entities", storyRow.entities.slice(0, 3))
-      .order("first_seen_at", { ascending: false })
-      .limit(3);
-
-    for (const em of entityMatches ?? []) {
-      relatedIds.add(em.id);
     }
   }
 
@@ -319,36 +306,16 @@ export async function getStory(id: string): Promise<StoryDetailRecord | null> {
     }
   }
 
-  // 4. Construct rich chronological timeline across time
-  const timeline: StoryMilestone[] = [
-    {
-      date: storyRow.first_seen_at.slice(0, 10),
-      label: "Initial Emergence",
-      description: `First reported in newsletter briefing: "${storyRow.canonical_title}"`,
-    },
-  ];
-
-  for (const upd of storyUpdates) {
-    timeline.push({
-      date: upd.createdAt.slice(0, 10),
-      label: "Developing Story Update",
-      description: upd.note,
-    });
-  }
-
-  // If there are related historical stories from last week or last month, anchor them into the timeline
-  for (const hist of relatedHistoricalStories) {
-    timeline.push({
-      date: hist.firstSeenAt.slice(0, 10),
-      label: "Related Historical Coverage",
-      description: hist.canonicalTitle,
-      relatedStoryId: hist.id,
-      relatedStoryTitle: hist.canonicalTitle,
-    });
-  }
-
-  // Sort timeline chronologically
-  timeline.sort((a, b) => (a.date > b.date ? 1 : -1));
+  // 4. Construct authoritative chronological subject matter history & precedents
+  const timeline = await fetchOrGenerateMatterTimeline({
+    id: storyRow.id,
+    canonicalTitle: storyRow.canonical_title,
+    summary: storyRow.summary,
+    whyItMatters: storyRow.why_it_matters,
+    category: storyRow.category,
+    firstSeenAt: storyRow.first_seen_at,
+    existingTimeline: storyRow.timeline,
+  });
 
   return {
     ...baseStory,

@@ -13,6 +13,10 @@ export interface StoryTimelineProps {
 }
 
 function formatDate(dateStr: string) {
+  if (!dateStr) return "";
+  if (dateStr.includes("–") || dateStr.includes("- ") || isNaN(Date.parse(dateStr))) {
+    return dateStr;
+  }
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
@@ -39,14 +43,14 @@ export function StoryTimeline({ timeline, relatedHistoricalStories }: StoryTimel
       <div className="flex items-center justify-between border-b border-rule pb-4">
         <div>
           <span className="text-[10px] font-semibold uppercase tracking-[0.26em] text-crimson">
-            Historical Intelligence Continuity
+            Subject Matter Background & Precedents
           </span>
           <h2 className="mt-1 font-serif text-2xl font-medium tracking-tight text-ink">
-            Story Evolution & Precedent Timeline
+            Historical Evolution of the Matter
           </h2>
         </div>
         <span className="inline-flex items-center rounded-full border border-rule px-3 py-1 text-[11px] font-medium tracking-wider text-mute">
-          ⏱️ Chronological Chain
+          ⏱️ Real-World Continuity
         </span>
       </div>
 
