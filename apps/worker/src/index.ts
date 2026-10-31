@@ -3,9 +3,49 @@ import { processPendingEmails, triageFailedEmails } from "./jobs/process-email";
 import { syncGmail } from "./jobs/sync-gmail";
 import { withJobSpan } from "./telemetry";
 import { getApiKeys } from "./ai/gemini";
+import { supabase } from "./supabase";
 import { env } from "./env";
 
 const command = process.argv[2] ?? "help";
+
+async function withProcessingJob<T>(jobType: string, fn: () => Promise<T>): Promise<T> {
+  let jobId: string | null = null;
+  try {
+    const { data } = await supabase
+      .from("processing_jobs")
+      .insert({ job_type: jobType, status: "running", attempts: 1 })
+      .select("id")
+      .maybeSingle();
+    jobId = data?.id ?? null;
+  } catch {}
+
+  try {
+    const result = await fn();
+    if (jobId) {
+      await supabase
+        .from("processing_jobs")
+        .update({
+          status: "succeeded",
+          payload: typeof result === "object" && result !== null ? result : {},
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+    }
+    return result;
+  } catch (error: any) {
+    if (jobId) {
+      await supabase
+        .from("processing_jobs")
+        .update({
+          status: "failed",
+          last_error: error?.message || String(error),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+    }
+    throw error;
+  }
+}
 
 async function main() {
   const keys = getApiKeys();
@@ -16,34 +56,44 @@ async function main() {
 
   switch (command) {
     case "sync": {
-      const result = await withJobSpan("worker.gmail_sync", { "job.type": "gmail.sync" }, syncGmail);
+      const result = await withProcessingJob("gmail_sync", () =>
+        withJobSpan("worker.gmail_sync", { "job.type": "gmail.sync" }, syncGmail),
+      );
       console.log(JSON.stringify({ command, ...result }));
       break;
     }
     case "backfill": {
-      const result = await withJobSpan("worker.gmail_backfill", { "job.type": "gmail.backfill" }, () =>
-        syncGmail({ backfill: true }),
+      const result = await withProcessingJob("gmail_backfill", () =>
+        withJobSpan("worker.gmail_backfill", { "job.type": "gmail.backfill" }, () =>
+          syncGmail({ backfill: true }),
+        ),
       );
       console.log(JSON.stringify({ command, ...result }));
       break;
     }
     case "process": {
-      const result = await withJobSpan("worker.process_emails", { "job.type": "email.process" }, processPendingEmails);
+      const result = await withProcessingJob("email_process", () =>
+        withJobSpan("worker.process_emails", { "job.type": "email.process" }, processPendingEmails),
+      );
       console.log(JSON.stringify({ command, ...result }));
       break;
     }
     case "triage": {
-      const result = await withJobSpan("worker.triage_failed_emails", { "job.type": "email.triage" }, () =>
-        triageFailedEmails(100),
+      const result = await withProcessingJob("email_triage", () =>
+        withJobSpan("worker.triage_failed_emails", { "job.type": "email.triage" }, () =>
+          triageFailedEmails(100),
+        ),
       );
       console.log(JSON.stringify({ command, ...result }));
       break;
     }
     case "briefing": {
-      const result = await withJobSpan(
-        "worker.generate_briefing",
-        { "job.type": "briefing.generate" },
-        generateDailyBriefing,
+      const result = await withProcessingJob("daily_briefing", () =>
+        withJobSpan(
+          "worker.generate_briefing",
+          { "job.type": "briefing.generate" },
+          generateDailyBriefing,
+        ),
       );
       console.log(JSON.stringify({ command, ...result }));
       break;
@@ -56,7 +106,9 @@ async function main() {
 
       console.log("\n================ [STEP 1/4: GMAIL SYNC] ================");
       try {
-        sync = await withJobSpan("worker.gmail_sync", { "job.type": "gmail.sync" }, syncGmail);
+        sync = await withProcessingJob("gmail_sync", () =>
+          withJobSpan("worker.gmail_sync", { "job.type": "gmail.sync" }, syncGmail),
+        );
         console.log(`[Worker] Gmail sync completed: ${sync.scanned} scanned, ${sync.inserted} inserted.`);
       } catch (err: any) {
         console.error("[Worker] Warning during Gmail sync:", err?.message || err);
@@ -64,10 +116,12 @@ async function main() {
 
       console.log("\n================ [STEP 2/4: AI TRIAGE FAILED EMAILS] ==");
       try {
-        triage = await withJobSpan(
-          "worker.triage_failed_emails",
-          { "job.type": "email.triage" },
-          () => triageFailedEmails(100),
+        triage = await withProcessingJob("email_triage", () =>
+          withJobSpan(
+            "worker.triage_failed_emails",
+            { "job.type": "email.triage" },
+            () => triageFailedEmails(100),
+          ),
         );
         console.log(`[Worker] AI Triage completed: ${triage.triaged} triaged (${triage.approved} approved, ${triage.ignored} ignored).`);
       } catch (err: any) {
@@ -76,10 +130,12 @@ async function main() {
 
       console.log("\n================ [STEP 3/4: PROCESS EMAILS] ============");
       try {
-        process = await withJobSpan(
-          "worker.process_emails",
-          { "job.type": "email.process" },
-          processPendingEmails,
+        process = await withProcessingJob("email_process", () =>
+          withJobSpan(
+            "worker.process_emails",
+            { "job.type": "email.process" },
+            processPendingEmails,
+          ),
         );
         console.log(`[Worker] Email processing completed: ${process.processed} processed.`);
       } catch (err: any) {
@@ -88,10 +144,12 @@ async function main() {
 
       console.log("\n================ [STEP 4/4: GENERATE BRIEFING] =========");
       try {
-        briefing = await withJobSpan(
-          "worker.generate_briefing",
-          { "job.type": "briefing.generate" },
-          generateDailyBriefing,
+        briefing = await withProcessingJob("daily_briefing", () =>
+          withJobSpan(
+            "worker.generate_briefing",
+            { "job.type": "briefing.generate" },
+            generateDailyBriefing,
+          ),
         );
         console.log(`[Worker] Briefing generation completed:`, briefing);
       } catch (err: any) {

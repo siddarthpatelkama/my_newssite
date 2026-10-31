@@ -59,6 +59,26 @@ export async function POST(request: NextRequest) {
     max_scroll_percent: event.eventType === "read_session" ? event.maxScrollPercent ?? 0 : null,
   });
 
+  // Mirror interaction into user_interactions table for analytics and personalized ranking
+  if (event.storyId) {
+    const actionMap: Record<string, string> = {
+      page_view: "view",
+      read_session: "view",
+      like: "like",
+      dislike: "dislike",
+      understood: "like",
+      needs_context: "skip",
+    };
+    const action = actionMap[event.eventType] || "view";
+    try {
+      await supabase.from("user_interactions").insert({
+        story_id: event.storyId,
+        action,
+        user_id: null,
+      });
+    } catch {}
+  }
+
   await recordSpan({
     name: "telemetry.store_reader_event",
     startTime: startedAt,

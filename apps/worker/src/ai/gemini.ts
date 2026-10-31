@@ -652,3 +652,26 @@ Return valid JSON with this exact schema:
         : null,
   };
 }
+
+
+export async function generateStoryEmbedding(text: string): Promise<number[]> {
+  const { key, index, total } = getNextApiKey();
+  const masked = maskKey(key);
+  try {
+    const ai = new GoogleGenAI({ apiKey: key });
+    console.log(`[Gemini] Generating 768-dim vector embedding with key #${index}/${total} (${masked})...`);
+    const response = await ai.models.embedContent({
+      model: "text-embedding-004",
+      contents: text.slice(0, 2048),
+    });
+    const values = response.embeddings?.[0]?.values;
+    if (!values || !Array.isArray(values) || values.length === 0) {
+      throw new Error("text-embedding-004 did not return vector values");
+    }
+    return values;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[Gemini] Embedding error on key #${index} (${masked}): ${message.slice(0, 100)}`);
+    throw err;
+  }
+}

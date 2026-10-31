@@ -5,6 +5,7 @@ import {
   hasGeminiKey,
   triageFailedEmail,
   matchHistoricalContext,
+  generateStoryEmbedding,
 } from "../ai/gemini";
 import { extractArticlesFromHtml, hashContent, normalizeUrl } from "../gmail/parser";
 import { supabase } from "../supabase";
@@ -144,6 +145,27 @@ export async function triageFailedEmails(limit = 100) {
               story_id: createdStory.id,
               article_id: insertedArt.id,
             });
+
+            await supabase.from("story_updates").insert({
+              story_id: createdStory.id,
+              note: `Initial coverage: Triaged into newsroom feed from ${sender?.sender_name ?? "newsletter"}.`,
+            });
+
+            if (hasGeminiKey()) {
+              try {
+                const embedding = await generateStoryEmbedding(`${triaged.story.title}\n${triaged.story.summary}`);
+                await supabase.from("story_embeddings").upsert(
+                  {
+                    story_id: createdStory.id,
+                    embedding,
+                    model: "text-embedding-004",
+                  },
+                  { onConflict: "story_id" },
+                );
+              } catch (embErr) {
+                console.warn("[Story Embeddings] Non-fatal embedding warning:", embErr);
+              }
+            }
           }
 
           await supabase
@@ -453,11 +475,25 @@ async function processOneEmail(email: {
           last_updated_at: new Date().toISOString(),
         });
 
-        if (historyMatch?.updateNote) {
-          await supabase.from("story_updates").insert({
-            story_id: storyId,
-            note: historyMatch.updateNote,
-          });
+        await supabase.from("story_updates").insert({
+          story_id: storyId,
+          note: historyMatch?.updateNote || `Initial coverage: Story curated and synthesized from ${sender?.sender_name ?? "newsletter"}.`,
+        });
+
+        if (hasGeminiKey()) {
+          try {
+            const embedding = await generateStoryEmbedding(`${synthesized.title}\n${synthesized.summary}`);
+            await supabase.from("story_embeddings").upsert(
+              {
+                story_id: storyId,
+                embedding,
+                model: "text-embedding-004",
+              },
+              { onConflict: "story_id" },
+            );
+          } catch (embErr) {
+            console.warn("[Story Embeddings] Non-fatal embedding warning:", embErr);
+          }
         }
       } else {
         const updateNote =
@@ -542,6 +578,27 @@ async function processOneEmail(email: {
               story_id: createdStory.id,
               article_id: insertedArt.id,
             });
+
+            await supabase.from("story_updates").insert({
+              story_id: createdStory.id,
+              note: `Initial coverage: Triaged into newsroom feed from ${sender?.sender_name ?? "newsletter"}.`,
+            });
+
+            if (hasGeminiKey()) {
+              try {
+                const embedding = await generateStoryEmbedding(`${triaged.story.title}\n${triaged.story.summary}`);
+                await supabase.from("story_embeddings").upsert(
+                  {
+                    story_id: createdStory.id,
+                    embedding,
+                    model: "text-embedding-004",
+                  },
+                  { onConflict: "story_id" },
+                );
+              } catch (embErr) {
+                console.warn("[Story Embeddings] Non-fatal embedding warning:", embErr);
+              }
+            }
           }
 
           await supabase.from("emails").update({
