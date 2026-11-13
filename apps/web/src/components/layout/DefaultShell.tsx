@@ -2,6 +2,7 @@ import type { ThemeSpec } from "@signalos/shared";
 import { SiteHeader } from "./SiteHeader";
 import { SiteFooter } from "./SiteFooter";
 import { PageTelemetry } from "@/components/telemetry/PageTelemetry";
+import { NewsroomShortcuts } from "@/components/layout/NewsroomShortcuts";
 import { getActiveThemeSpec } from "@/lib/queries";
 
 export async function DefaultShell({
@@ -69,6 +70,7 @@ export async function DefaultShell({
         {children}
         <SiteFooter />
         <PageTelemetry />
+        <NewsroomShortcuts />
       </div>
     </div>
   );

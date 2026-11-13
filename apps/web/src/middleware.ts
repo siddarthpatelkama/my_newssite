@@ -8,7 +8,7 @@ export async function middleware(request: NextRequest) {
     path === "/api/auth/login" ||
     path === "/api/gmail/callback" ||
     path.startsWith("/icon") ||
-    path.startsWith("/apple-icon") ||
+    path.startsWith("/apple-icon") || 
     path === "/favicon.ico" ||
     path.endsWith(".png") ||
     path.endsWith(".ico")

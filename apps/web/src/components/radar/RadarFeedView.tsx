@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { RadarItem } from "@/lib/radar";
+import { saveItem } from "@/lib/saved";
 
 export function RadarFeedView({ initialItems }: { initialItems: RadarItem[] }) {
   const [items, setItems] = useState<RadarItem[]>(initialItems);
@@ -28,6 +29,18 @@ export function RadarFeedView({ initialItems }: { initialItems: RadarItem[] }) {
     try {
       localStorage.setItem("signalos_radar_feedbacks", JSON.stringify(next));
     } catch {}
+
+    if (action === "save") {
+      saveItem({
+        id: item.id,
+        title: item.title,
+        summary: item.summary,
+        category: item.category,
+        sourceName: item.source,
+        canonicalUrl: item.url,
+        type: "radar",
+      });
+    }
 
     try {
       const res = await fetch("/api/radar/feedback", {
@@ -191,12 +204,12 @@ export function RadarFeedView({ initialItems }: { initialItems: RadarItem[] }) {
                 </div>
 
                 {/* Card Feedback Loop Controls */}
-                <div className="mt-6 border-t border-rule/50 pt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="mt-6 border-t border-rule/50 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <a
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-rule/80 bg-paper px-3 py-1 text-xs font-serif font-semibold text-crimson transition-all hover:border-crimson hover:bg-paper/90"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rule/80 bg-paper px-3 py-1.5 text-xs font-serif font-semibold text-crimson transition-all hover:border-crimson hover:bg-paper/90 self-start"
                     title="Read original publication, preprint, or external source"
                   >
                     <span>📄</span>
@@ -204,7 +217,7 @@ export function RadarFeedView({ initialItems }: { initialItems: RadarItem[] }) {
                   </a>
 
                   {/* Action Buttons: Signal (Like) / Noise (Dislike) / Save */}
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
                     <button
                       onClick={() => handleFeedback(item, "like")}
                       className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-serif transition-all ${

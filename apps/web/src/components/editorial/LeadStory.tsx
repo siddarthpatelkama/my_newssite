@@ -1,16 +1,37 @@
 import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
+import { BookmarkButton } from "./BookmarkButton";
 
 export function LeadStory({ story }: { story: StoryRecord }) {
   const primarySource = story.sources[0];
   const emailTargetId = primarySource?.emailId || primarySource?.id || story.id;
+  const canonicalUrl = primarySource?.canonicalUrl;
 
   return (
-    <article className="grid gap-8 border-b border-ink pb-10 lg:grid-cols-[1.4fr_1fr]">
+    <article
+      data-story-card={story.id}
+      data-email-id={emailTargetId}
+      className="story-card grid gap-8 border-b border-ink pb-10 lg:grid-cols-[1.4fr_1fr] transition-all duration-200"
+    >
       <div>
-        <p className="text-[11px] uppercase tracking-[0.28em] text-crimson">
-          Top story · {story.category?.replace("-", " ")}
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-crimson">
+            Top story · {story.category?.replace("-", " ")}
+          </p>
+          <BookmarkButton
+            showLabel
+            item={{
+              id: story.id,
+              title: story.canonicalTitle,
+              summary: story.summary,
+              category: story.category,
+              sourceName: primarySource?.sourceName ?? null,
+              canonicalUrl,
+              emailId: primarySource?.emailId ?? null,
+              type: "story",
+            }}
+          />
+        </div>
         <h2 className="mt-3 font-serif text-4xl leading-[1.15] sm:text-6xl">
           <Link href={`/stories/${story.id}`} target="_blank">
             {story.canonicalTitle}

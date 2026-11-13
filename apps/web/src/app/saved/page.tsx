@@ -1,15 +1,16 @@
 import { DefaultShell } from "@/components/layout/DefaultShell";
+import { SavedStoriesView } from "@/components/editorial/SavedStoriesView";
+import { getActiveThemeSpec } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-export default function SavedPage() {
+export default async function SavedPage() {
+  const themeSpec = await getActiveThemeSpec();
+
   return (
-    <DefaultShell>
-      <main className="max-w-2xl">
-        <h1 className="font-serif text-4xl">Saved stories</h1>
-        <p className="mt-4 leading-7 text-ink/80">
-          Saving stories is not available yet. This page will be enabled after saved-story accounts are implemented.
-        </p>
+    <DefaultShell themeSpec={themeSpec}>
+      <main className="max-w-5xl mx-auto">
+        <SavedStoriesView />
       </main>
     </DefaultShell>
   );
