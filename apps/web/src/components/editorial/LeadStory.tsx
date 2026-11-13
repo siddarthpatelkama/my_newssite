@@ -2,6 +2,9 @@ import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 
 export function LeadStory({ story }: { story: StoryRecord }) {
+  const primarySource = story.sources[0];
+  const emailTargetId = primarySource?.emailId || primarySource?.id || story.id;
+
   return (
     <article className="grid gap-8 border-b border-ink pb-10 lg:grid-cols-[1.4fr_1fr]">
       <div>
@@ -27,13 +30,25 @@ export function LeadStory({ story }: { story: StoryRecord }) {
             </li>
           ))}
         </ul>
-        <Link
-          href={`/stories/${story.id}`}
-          target="_blank"
-          className="mt-6 inline-block text-xs uppercase tracking-[0.2em] text-crimson"
-        >
-          Continue with sources →
-        </Link>
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <Link
+            href={`/stories/${story.id}`}
+            target="_blank"
+            className="text-xs uppercase tracking-[0.2em] text-crimson hover:underline"
+          >
+            Continue with sources →
+          </Link>
+
+          <Link
+            href={`/emails/${emailTargetId}`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 py-1.5 font-serif text-xs font-medium text-ink transition hover:border-crimson hover:text-crimson"
+            title="Read original newsletter email"
+          >
+            <span>✉️</span>
+            <span>Read original email →</span>
+          </Link>
+        </div>
       </div>
     </article>
   );

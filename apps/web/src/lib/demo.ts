@@ -24,6 +24,7 @@ export const demoStories = [
     sources: [
       {
         id: "src-1",
+        emailId: "demo-email-1",
         title: "Original framework announcement",
         canonicalUrl: "https://example.com/framework",
         sourceName: "Example Lab",
@@ -51,6 +52,7 @@ export const demoStories = [
     sources: [
       {
         id: "src-2",
+        emailId: "demo-email-2",
         title: "Gmail API push guide",
         canonicalUrl: "https://developers.google.com/gmail/api/guides/push",
         sourceName: "Google for Developers",
@@ -78,6 +80,7 @@ export const demoStories = [
     sources: [
       {
         id: "src-3",
+        emailId: "demo-email-3",
         title: "Why source-linked summaries matter",
         canonicalUrl: "https://example.com/provenance",
         sourceName: "Example Intel",
@@ -105,6 +108,7 @@ export const demoStories = [
     sources: [
       {
         id: "src-4",
+        emailId: "demo-email-4",
         title: "Project idea extracted from coverage",
         canonicalUrl: "https://example.com/build",
         sourceName: "Example Lab",

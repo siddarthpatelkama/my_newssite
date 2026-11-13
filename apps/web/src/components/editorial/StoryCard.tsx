@@ -2,6 +2,10 @@ import Link from "next/link";
 import type { StoryRecord } from "@/lib/queries";
 
 export function StoryCard({ story, kicker }: { story: StoryRecord; kicker?: string }) {
+  const primarySource = story.sources[0];
+  const emailTargetId = primarySource?.emailId || primarySource?.id || story.id;
+  const canonicalUrl = primarySource?.canonicalUrl;
+
   return (
     <article className="flex h-full flex-col border-t border-rule pt-4">
       <p className="text-[11px] uppercase tracking-[0.22em] text-crimson">
@@ -13,10 +17,37 @@ export function StoryCard({ story, kicker }: { story: StoryRecord; kicker?: stri
         </Link>
       </h3>
       <p className="mt-3 text-[15px] leading-7 text-ink/80">{story.summary}</p>
-      <p className="mt-auto pt-4 text-xs text-mute">
-        {story.sources[0]?.sourceName ?? "Newsletter"} · {story.sources.length} source
-        {story.sources.length === 1 ? "" : "s"}
-      </p>
+      <div className="mt-auto pt-4 flex flex-wrap items-center justify-between gap-2 border-t border-rule/40 text-xs">
+        <span className="text-mute">
+          {primarySource?.sourceName ?? "Newsletter"} · {story.sources.length} source
+          {story.sources.length === 1 ? "" : "s"}
+        </span>
+
+        <div className="flex items-center gap-2">
+          {/* Direct Button to Read Original Email */}
+          <Link
+            href={`/emails/${emailTargetId}`}
+            target="_blank"
+            className="inline-flex items-center gap-1 rounded border border-rule/80 bg-paper/80 px-2.5 py-1 font-serif text-xs font-medium text-crimson transition hover:border-crimson hover:bg-paper"
+            title="Read the original newsletter email"
+          >
+            <span>✉️</span>
+            <span>Read original email →</span>
+          </Link>
+
+          {canonicalUrl && (
+            <a
+              href={canonicalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-mute hover:text-ink transition"
+              title="Open external web source link"
+            >
+              <span>↗</span>
+            </a>
+          )}
+        </div>
+      </div>
     </article>
   );
 }

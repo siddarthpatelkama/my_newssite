@@ -17,11 +17,29 @@ export type StoryRecord = {
   lastUpdatedAt: string;
   sources: Array<{
     id: string;
+    emailId?: string | null;
     title: string;
     canonicalUrl: string | null;
     sourceName: string | null;
     newsletterName: string | null;
+    gmailMessageId?: string | null;
   }>;
+};
+
+export type EmailRecord = {
+  id: string;
+  gmailMessageId: string | null;
+  gmailThreadId: string | null;
+  subject: string | null;
+  receivedAt: string | null;
+  bodyText: string | null;
+  bodyHtml: string | null;
+  senderName: string | null;
+  senderEmail: string | null;
+  canonicalUrl?: string | null;
+  articleTitle?: string | null;
+  storyId?: string | null;
+  storyTitle?: string | null;
 };
 
 export type StoryMilestone = {
@@ -67,11 +85,13 @@ type StoryRow = {
     article_id: string;
     articles: {
       id: string;
+      email_id?: string | null;
       title: string;
       canonical_url: string | null;
       source_name: string | null;
     } | Array<{
       id: string;
+      email_id?: string | null;
       title: string;
       canonical_url: string | null;
       source_name: string | null;
@@ -81,12 +101,14 @@ type StoryRow = {
 
 function mapArticle(article: {
   id: string;
+  email_id?: string | null;
   title: string;
   canonical_url: string | null;
   source_name: string | null;
 }) {
   return {
     id: article.id,
+    emailId: article.email_id ?? null,
     title: article.title,
     canonicalUrl: article.canonical_url,
     sourceName: article.source_name,
@@ -103,7 +125,7 @@ export async function getStories(): Promise<StoryRecord[]> {
     supabase
       .from("stories")
       .select(
-        "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, story_sources(article_id, articles(id, title, canonical_url, source_name))",
+        "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, story_sources(article_id, articles(id, email_id, title, canonical_url, source_name))",
       )
       .order("last_updated_at", { ascending: false })
       .limit(40),
@@ -210,7 +232,7 @@ export async function getStory(id: string): Promise<StoryDetailRecord | null> {
   const directRes = await supabase
     .from("stories")
     .select(
-      "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, related_story_ids, timeline, story_sources(article_id, articles(id, title, canonical_url, source_name))",
+      "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, related_story_ids, timeline, story_sources(article_id, articles(id, email_id, title, canonical_url, source_name))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -220,7 +242,7 @@ export async function getStory(id: string): Promise<StoryDetailRecord | null> {
     const fallbackRes = await supabase
       .from("stories")
       .select(
-        "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, story_sources(article_id, articles(id, title, canonical_url, source_name))",
+        "id, canonical_title, summary, why_it_matters, category, key_points, entities, novelty_score, quality_score, first_seen_at, last_updated_at, story_sources(article_id, articles(id, email_id, title, canonical_url, source_name))",
       )
       .eq("id", id)
       .maybeSingle();
@@ -438,4 +460,249 @@ export async function getActiveThemeSpec(): Promise<ThemeSpec | null> {
   }
 
   return null;
+}
+
+export async function getEmail(id: string): Promise<EmailRecord | null> {
+  const supabase = createAdminSupabase();
+
+  if (supabase) {
+    try {
+      // 1. Direct query on emails table by email UUID
+      const { data: directEmail } = await supabase
+        .from("emails")
+        .select("id, gmail_message_id, gmail_thread_id, subject, received_at, body_text, body_html, newsletter_id, newsletters(sender_name, sender_email)")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (directEmail) {
+        const nl = directEmail.newsletters as { sender_name?: string | null; sender_email?: string | null } | null;
+        const { data: art } = await supabase
+          .from("articles")
+          .select("id, title, canonical_url, story_sources(story_id, stories(id, canonical_title))")
+          .eq("email_id", directEmail.id)
+          .limit(1)
+          .maybeSingle();
+
+        const storySource = Array.isArray(art?.story_sources) ? art?.story_sources[0] : art?.story_sources;
+        const story = storySource?.stories as { id?: string; canonical_title?: string } | null;
+
+        return {
+          id: directEmail.id,
+          gmailMessageId: directEmail.gmail_message_id,
+          gmailThreadId: directEmail.gmail_thread_id,
+          subject: directEmail.subject,
+          receivedAt: directEmail.received_at,
+          bodyText: directEmail.body_text,
+          bodyHtml: directEmail.body_html,
+          senderName: nl?.sender_name ?? "Newsletter Sender",
+          senderEmail: nl?.sender_email ?? null,
+          canonicalUrl: art?.canonical_url ?? null,
+          articleTitle: art?.title ?? directEmail.subject,
+          storyId: story?.id ?? null,
+          storyTitle: story?.canonical_title ?? null,
+        };
+      }
+
+      // 2. Query by article ID (in case an article id was passed)
+      const { data: articleRow } = await supabase
+        .from("articles")
+        .select("id, email_id, title, canonical_url, content_text, story_sources(story_id, stories(id, canonical_title)), emails(id, gmail_message_id, gmail_thread_id, subject, received_at, body_text, body_html, newsletters(sender_name, sender_email))")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (articleRow) {
+        const rawEmail = Array.isArray(articleRow.emails) ? articleRow.emails[0] : articleRow.emails;
+        const emailRow = rawEmail as unknown as {
+          id: string;
+          gmail_message_id: string | null;
+          gmail_thread_id: string | null;
+          subject: string | null;
+          received_at: string | null;
+          body_text: string | null;
+          body_html: string | null;
+          newsletters?: { sender_name?: string | null; sender_email?: string | null } | Array<{ sender_name?: string | null; sender_email?: string | null }> | null;
+        } | null;
+
+        const storySource = Array.isArray(articleRow.story_sources) ? articleRow.story_sources[0] : articleRow.story_sources;
+        const story = (Array.isArray(storySource?.stories) ? storySource?.stories[0] : storySource?.stories) as { id?: string; canonical_title?: string } | null;
+        const rawNl = Array.isArray(emailRow?.newsletters) ? emailRow?.newsletters[0] : emailRow?.newsletters;
+
+        if (emailRow) {
+          return {
+            id: emailRow.id,
+            gmailMessageId: emailRow.gmail_message_id,
+            gmailThreadId: emailRow.gmail_thread_id,
+            subject: emailRow.subject || articleRow.title,
+            receivedAt: emailRow.received_at,
+            bodyText: emailRow.body_text || articleRow.content_text,
+            bodyHtml: emailRow.body_html,
+            senderName: rawNl?.sender_name ?? "Curated Newsletter",
+            senderEmail: rawNl?.sender_email ?? null,
+            canonicalUrl: articleRow.canonical_url,
+            articleTitle: articleRow.title,
+            storyId: story?.id ?? null,
+            storyTitle: story?.canonical_title ?? null,
+          };
+        } else {
+          return {
+            id: articleRow.id,
+            gmailMessageId: null,
+            gmailThreadId: null,
+            subject: articleRow.title,
+            receivedAt: new Date().toISOString(),
+            bodyText: articleRow.content_text,
+            bodyHtml: null,
+            senderName: "Newsletter Publication",
+            senderEmail: null,
+            canonicalUrl: articleRow.canonical_url,
+            articleTitle: articleRow.title,
+            storyId: story?.id ?? null,
+            storyTitle: story?.canonical_title ?? null,
+          };
+        }
+      }
+
+      // 3. Query by story ID (in case story id was passed)
+      const { data: storyRow } = await supabase
+        .from("stories")
+        .select("id, canonical_title, story_sources(articles(id, email_id, title, canonical_url, content_text, emails(id, gmail_message_id, gmail_thread_id, subject, received_at, body_text, body_html, newsletters(sender_name, sender_email))))")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (storyRow) {
+        const rawArt = Array.isArray(storyRow.story_sources?.[0]?.articles)
+          ? storyRow.story_sources?.[0]?.articles[0]
+          : storyRow.story_sources?.[0]?.articles;
+        const firstArt = rawArt as unknown as {
+          id: string;
+          email_id?: string;
+          title: string;
+          canonical_url: string | null;
+          content_text: string | null;
+          emails?: {
+            id: string;
+            gmail_message_id: string | null;
+            gmail_thread_id: string | null;
+            subject: string | null;
+            received_at: string | null;
+            body_text: string | null;
+            body_html: string | null;
+            newsletters?: { sender_name?: string | null; sender_email?: string | null } | Array<{ sender_name?: string | null; sender_email?: string | null }> | null;
+          } | Array<{
+            id: string;
+            gmail_message_id: string | null;
+            gmail_thread_id: string | null;
+            subject: string | null;
+            received_at: string | null;
+            body_text: string | null;
+            body_html: string | null;
+            newsletters?: { sender_name?: string | null; sender_email?: string | null } | Array<{ sender_name?: string | null; sender_email?: string | null }> | null;
+          }> | null;
+        } | null;
+
+        if (firstArt) {
+          const rawEmail = Array.isArray(firstArt.emails) ? firstArt.emails[0] : firstArt.emails;
+          const emailRow = rawEmail as unknown as {
+            id: string;
+            gmail_message_id: string | null;
+            gmail_thread_id: string | null;
+            subject: string | null;
+            received_at: string | null;
+            body_text: string | null;
+            body_html: string | null;
+            newsletters?: { sender_name?: string | null; sender_email?: string | null } | Array<{ sender_name?: string | null; sender_email?: string | null }> | null;
+          } | null;
+          const rawNl = Array.isArray(emailRow?.newsletters) ? emailRow?.newsletters[0] : emailRow?.newsletters;
+
+          return {
+            id: emailRow?.id ?? firstArt.id,
+            gmailMessageId: emailRow?.gmail_message_id ?? null,
+            gmailThreadId: emailRow?.gmail_thread_id ?? null,
+            subject: emailRow?.subject || firstArt.title,
+            receivedAt: emailRow?.received_at ?? new Date().toISOString(),
+            bodyText: emailRow?.body_text || firstArt.content_text,
+            bodyHtml: emailRow?.body_html ?? null,
+            senderName: rawNl?.sender_name ?? "Curated Newsletter",
+            senderEmail: rawNl?.sender_email ?? null,
+            canonicalUrl: firstArt.canonical_url,
+            articleTitle: firstArt.title,
+            storyId: storyRow.id,
+            storyTitle: storyRow.canonical_title,
+          };
+        }
+      }
+
+      // 4. Query by gmail_message_id
+      const { data: byGmailId } = await supabase
+        .from("emails")
+        .select("id, gmail_message_id, gmail_thread_id, subject, received_at, body_text, body_html, newsletter_id, newsletters(sender_name, sender_email)")
+        .eq("gmail_message_id", id)
+        .maybeSingle();
+
+      if (byGmailId) {
+        const nl = byGmailId.newsletters as { sender_name?: string | null; sender_email?: string | null } | null;
+        return {
+          id: byGmailId.id,
+          gmailMessageId: byGmailId.gmail_message_id,
+          gmailThreadId: byGmailId.gmail_thread_id,
+          subject: byGmailId.subject,
+          receivedAt: byGmailId.received_at,
+          bodyText: byGmailId.body_text,
+          bodyHtml: byGmailId.body_html,
+          senderName: nl?.sender_name ?? "Newsletter Sender",
+          senderEmail: nl?.sender_email ?? null,
+        };
+      }
+    } catch (err) {
+      console.warn("Unable to fetch email record from Supabase:", err);
+    }
+  }
+
+  // Fallback demo fixture
+  const demoMatch = demoStories.find(
+    (s) => s.id === id || s.sources.some((src) => src.id === id || src.emailId === id),
+  );
+  const matchedSource = demoMatch?.sources[0];
+
+  return {
+    id,
+    gmailMessageId: null,
+    gmailThreadId: null,
+    subject: matchedSource?.title || demoMatch?.canonicalTitle || "The AI Revolution in Software Engineering & Agent Architectures",
+    receivedAt: demoMatch?.firstSeenAt || new Date().toISOString(),
+    senderName: matchedSource?.sourceName || "Import AI / The Batch",
+    senderEmail: "editor@newsletters.signalos.local",
+    canonicalUrl: matchedSource?.canonicalUrl || "https://example.com/newsletter/issue-412",
+    articleTitle: matchedSource?.title || "Autonomous Coding Agents and Frontier Models",
+    storyId: demoMatch?.id ?? null,
+    storyTitle: demoMatch?.canonicalTitle ?? null,
+    bodyText: `Subject: ${matchedSource?.title || "Autonomous Coding Agents and Frontier Models"}\n\nWelcome to this edition of your curated personal intelligence paper.\n\nSummary:\n${demoMatch?.summary || "Coding agent frameworks are transitioning into full operating systems, acquiring memory, tools, and long-running control loops."}\n\nWhy It Matters:\n${demoMatch?.whyItMatters || "If you build software, the question is no longer whether agents can write code, but which parts of your workflow become durable agent loops."}\n\nKey Takeaways:\n${(demoMatch?.keyPoints || [
+      "Frontier models with open weights allow self-hosted inference.",
+      "Multi-agent swarms with verification loops outperform monolithic prompts.",
+      "Real-world continuity attached to every card prevents hallucinations.",
+    ]).map((p) => `• ${p}`).join("\n")}\n\nDelivered directly to your dedicated newsletter inbox and indexed by SignalOS.`,
+    bodyHtml: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 680px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #222;">
+        <div style="border-bottom: 2px solid #222; padding-bottom: 16px; margin-bottom: 24px;">
+          <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: #8c4b2d;">Original Newsletter Email</span>
+          <h1 style="font-size: 26px; font-weight: 700; margin: 8px 0 6px 0; color: #111;">${matchedSource?.title || demoMatch?.canonicalTitle || "Autonomous Coding Agents and Frontier Models"}</h1>
+          <p style="margin: 0; font-size: 13px; color: #666;">From: ${matchedSource?.sourceName || "Import AI"} &bull; Dedicated Newsletter Inbox</p>
+        </div>
+        <p style="font-size: 16px; margin-bottom: 20px;">Welcome to this week's intelligence dispatch.</p>
+        <p style="font-size: 16px; margin-bottom: 20px;">${demoMatch?.summary || "Coding agent frameworks are no longer chat wrappers. They are acquiring memory, tools, and long-running control loops."}</p>
+        <div style="background: #f7f5f0; border-left: 4px solid #8c4b2d; padding: 16px; margin: 24px 0; border-radius: 4px;">
+          <h3 style="margin: 0 0 8px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: #8c4b2d;">Why this matters</h3>
+          <p style="margin: 0; font-size: 15px; color: #333;">${demoMatch?.whyItMatters || "Durable agent loops are replacing manual step-by-step engineering workflows."}</p>
+        </div>
+        <ul style="font-size: 15px; padding-left: 20px; line-height: 1.8;">
+          ${(demoMatch?.keyPoints || [
+            "Frontier models with open weights allow self-hosted inference.",
+            "Multi-agent swarms with verification loops outperform monolithic prompts.",
+            "Real-world continuity attached to every card prevents hallucinations.",
+          ]).map((k) => `<li>${k}</li>`).join("")}
+        </ul>
+        <p style="font-size: 14px; color: #777; margin-top: 30px; border-top: 1px solid #eee; padding-top: 16px;">Delivered to your dedicated newsletter inbox &bull; SignalOS</p>
+      </div>
+    `,
+  };
 }

@@ -172,15 +172,15 @@ export async function generateDailyBriefing(date = new Date()) {
     }
   }
 
-  // Storage optimization: prune heavy raw HTML from processed/ignored emails to conserve Supabase free tier
+  // Storage optimization: prune heavy raw HTML from ignored noise emails to conserve storage
   try {
     await supabase
       .from("emails")
       .update({ body_html: null })
-      .in("processing_status", ["processed", "ignored"])
+      .eq("processing_status", "ignored")
       .not("body_html", "is", null);
   } catch (pruneErr) {
-    console.warn("[Storage Pruner] Warning pruning legacy body_html:", pruneErr);
+    console.warn("[Storage Pruner] Warning pruning ignored body_html:", pruneErr);
   }
 
   return { skipped: false, briefingId: briefing?.id, edition };

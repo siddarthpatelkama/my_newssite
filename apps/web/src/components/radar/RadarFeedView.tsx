@@ -191,14 +191,16 @@ export function RadarFeedView({ initialItems }: { initialItems: RadarItem[] }) {
                 </div>
 
                 {/* Card Feedback Loop Controls */}
-                <div className="mt-6 border-t border-rule/50 pt-4 flex items-center justify-between">
+                <div className="mt-6 border-t border-rule/50 pt-4 flex flex-wrap items-center justify-between gap-3">
                   <a
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs font-serif font-medium text-crimson hover:underline"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rule/80 bg-paper px-3 py-1 text-xs font-serif font-semibold text-crimson transition-all hover:border-crimson hover:bg-paper/90"
+                    title="Read original publication, preprint, or external source"
                   >
-                    Read original source →
+                    <span>📄</span>
+                    <span>Read original source / paper →</span>
                   </a>
 
                   {/* Action Buttons: Signal (Like) / Noise (Dislike) / Save */}
